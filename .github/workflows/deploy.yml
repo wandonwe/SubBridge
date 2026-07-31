@@ -1,13 +1,15 @@
 name: Deploy
 
-# Auto-deploys to Cloudflare on every push to main:
-#   - apps/worker   → Cloudflare Workers (wrangler deploy)
-#   - apps/frontend → Cloudflare Pages  (wrangler pages deploy)
+# Fully self-bootstrapping deploy: provisions the KV namespace, fills the
+# wrangler.toml id, deploys the Worker, sets the short-link secret, points
+# the frontend at the workers.dev subdomain and deploys Pages.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
-#   CLOUDFLARE_API_TOKEN   — API token with "Workers Scripts:Edit" and
-#                            "Cloudflare Pages:Edit" permissions
-#   CLOUDFLARE_ACCOUNT_ID  — found on the Cloudflare dashboard sidebar
+#   CLOUDFLARE_API_TOKEN   — permissions: Workers Scripts:Edit,
+#                            Workers KV Storage:Edit, Cloudflare Pages:Edit
+#   CLOUDFLARE_ACCOUNT_ID  — Cloudflare account id
+#   SUBBRIDGE_SECRET       — (optional) long random string for encrypted
+#                            short links; set once and never rotate casually
 
 on:
   push:
@@ -17,6 +19,10 @@ on:
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
   deploy-worker:
@@ -38,16 +44,43 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Provision KV namespace (first run only)
+        working-directory: apps/worker
+        run: |
+          if grep -q REPLACE_WITH_YOUR_KV_NAMESPACE_ID wrangler.toml; then
+            ID=$(pnpm exec wrangler kv namespace list | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const a=JSON.parse(d);const m=a.find(n=>n.title.includes('SUBBRIDGE_KV'));console.log(m?m.id:'')}catch{console.log('')}})")
+            if [ -z "$ID" ]; then
+              echo "Creating KV namespace…"
+              ID=$(pnpm exec wrangler kv namespace create SUBBRIDGE_KV | grep -oE '[0-9a-f]{32}' | head -1)
+            fi
+            if [ -z "$ID" ]; then
+              echo "::error::could not provision KV namespace"; exit 1
+            fi
+            sed -i "s/REPLACE_WITH_YOUR_KV_NAMESPACE_ID/$ID/" wrangler.toml
+            echo "Using KV namespace $ID"
+          else
+            echo "KV namespace id already configured."
+          fi
+
       - name: Deploy to Cloudflare Workers
         working-directory: apps/worker
         run: pnpm exec wrangler deploy
+
+      - name: Set short-link secret (when SUBBRIDGE_SECRET is configured)
+        working-directory: apps/worker
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUBBRIDGE_SECRET: ${{ secrets.SUBBRIDGE_SECRET }}
+        run: |
+          if [ -n "$SUBBRIDGE_SECRET" ]; then
+            printf '%s' "$SUBBRIDGE_SECRET" | pnpm exec wrangler secret put SECRET
+          else
+            echo "SUBBRIDGE_SECRET not set — short links stay disabled (501)."
+          fi
 
   deploy-pages:
     name: Deploy Frontend (Pages)
     runs-on: ubuntu-latest
+    needs: deploy-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,17 +97,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Point /api at the workers.dev subdomain
+        run: |
+          SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).result?.subdomain??'')}catch{console.log('')}})")
+          if [ -n "$SUB" ]; then
+            sed -i "s/YOUR_SUBDOMAIN/$SUB/" apps/frontend/public/_redirects
+            echo "API proxied to https://subbridge-api.$SUB.workers.dev"
+          else
+            echo "::warning::could not resolve workers.dev subdomain — edit apps/frontend/public/_redirects manually"
+          fi
+
       - name: Build frontend
         run: pnpm --filter @subbridge/frontend build
 
       - name: Ensure Pages project exists
         run: pnpm --dir apps/worker exec wrangler pages project create subbridge --production-branch=main || true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy to Cloudflare Pages
         run: pnpm --dir apps/worker exec wrangler pages deploy ../frontend/dist --project-name=subbridge
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

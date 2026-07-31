@@ -2,6 +2,7 @@
 name = "subbridge-api"
 main = "src/index.ts"
 compatibility_date = "2026-07-01"
+account_id = "ca9d7fc98ee2bbd236c20d2e887faf04"
 
 # Required: KV namespace for caching, short links and rate limiting.
 # Create with:  wrangler kv namespace create SUBBRIDGE_KV
