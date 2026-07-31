@@ -1,6 +1,5 @@
-# Cloudflare Pages: proxy API calls to the worker (adjust to your worker URL
-# or use a Pages Function / custom domain route instead).
-/api/*  https://subbridge-api.YOUR_SUBDOMAIN.workers.dev/api/:splat  200
+# Cloudflare Pages: proxy API calls to the worker's custom domain.
+/api/*  https://api.healthicare.top/api/:splat  200
 
 # SPA fallback
 /*      /index.html   200
