@@ -1,9 +1,5 @@
-# Cloudflare Pages: proxy /api/* to the Worker.
-# The deploy workflow rewrites API_ENDPOINT automatically:
-#   - to the API_DOMAIN secret if you set one (e.g. api.example.com), or
-#   - to this fork's own <worker>.<subdomain>.workers.dev otherwise.
-# Forks need to change nothing here.
-/api/*  https://API_ENDPOINT/api/:splat  200
-
-# SPA fallback
-/*      /index.html   200
+# SPA fallback — every route serves the single-page app.
+# The frontend calls the API by its absolute Worker URL (baked in at build
+# time via VITE_API_BASE), so there is no /api proxy here: Cloudflare Pages
+# cannot proxy /api/* to an external Worker anyway.
+/*  /index.html  200

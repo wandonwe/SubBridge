@@ -1,8 +1,8 @@
 name: Deploy
 
 # Fully self-bootstrapping deploy: provisions the KV namespace, fills the
-# wrangler.toml id, deploys the Worker, sets the short-link secret, points
-# the frontend at the workers.dev subdomain and deploys Pages.
+# wrangler.toml id, deploys the Worker, sets the short-link secret, bakes the
+# API base URL into the frontend and deploys Pages.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   CLOUDFLARE_API_TOKEN   — permissions: Workers Scripts:Edit,
@@ -117,11 +117,13 @@ jobs:
             ENDPOINT="subbridge-api.$SUB.workers.dev"
             echo "Using workers.dev endpoint: $ENDPOINT"
           fi
-          # Escape slashes/dots are fine here; endpoint is a bare hostname.
-          sed -i "s|API_ENDPOINT|$ENDPOINT|" apps/frontend/public/_redirects
-          echo "API proxied to https://$ENDPOINT"
+          # The frontend calls the API by absolute URL (baked in at build).
+          echo "VITE_API_BASE=https://$ENDPOINT" >> "$GITHUB_ENV"
+          echo "Frontend will call API at https://$ENDPOINT"
 
       - name: Build frontend
+        env:
+          VITE_API_BASE: ${{ env.VITE_API_BASE }}
         run: pnpm --filter @subbridge/frontend build
 
       - name: Ensure Pages project exists

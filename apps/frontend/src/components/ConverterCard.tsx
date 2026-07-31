@@ -3,6 +3,7 @@ import { Button, GlassCard, Select, Textarea } from '@subbridge/ui'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Check, Copy, ExternalLink, Link2, QrCode } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { apiOrigin } from '@/lib/api'
 import { buildConvertUrl, DEFAULT_ADVANCED, parseUrlInput } from '@/lib/convert'
 import { CLIENT_SCHEMES, FORMATS } from '@/lib/formats'
 import { addHistory, type HistoryEntry } from '@/lib/history'
@@ -30,7 +31,7 @@ export function ConverterCard({ onGenerated, onShowQr }: Props) {
       return
     }
     setError(null)
-    const convertUrl = buildConvertUrl(window.location.origin, urls, target, advanced)
+    const convertUrl = buildConvertUrl(apiOrigin(), urls, target, advanced)
     setResult(convertUrl)
     setCopied(false)
     onGenerated(

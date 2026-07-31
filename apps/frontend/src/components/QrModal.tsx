@@ -1,6 +1,7 @@
 import { Button } from '@subbridge/ui'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { apiUrl } from '@/lib/api'
 
 export interface QrModalProps {
   url: string | null
@@ -38,7 +39,7 @@ export function QrModal({ url, onClose }: QrModalProps) {
             </div>
             <div className="overflow-hidden rounded-2xl bg-white p-3 shadow-inner">
               <img
-                src={`/api/qrcode?text=${encodeURIComponent(url)}`}
+                src={apiUrl(`/api/qrcode?text=${encodeURIComponent(url)}`)}
                 alt="QR code of the subscription URL"
                 className="h-auto w-full"
                 draggable={false}
