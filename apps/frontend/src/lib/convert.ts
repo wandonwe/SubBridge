@@ -22,15 +22,27 @@ export const DEFAULT_ADVANCED: AdvancedOptions = {
   rules: true,
 }
 
+export interface UrlEntry {
+  url: string
+  /** Optional node-set name, e.g. "Prime" from a `Prime https://…` line. */
+  group?: string
+}
+
 /** Build the /api/convert URL for the given inputs. */
 export function buildConvertUrl(
   origin: string,
-  subscriptionUrls: string[],
+  entries: UrlEntry[],
   target: OutputFormat,
   advanced: AdvancedOptions,
 ): string {
   const params = new URLSearchParams()
-  for (const url of subscriptionUrls) params.append('url', url)
+  for (const entry of entries) params.append('url', entry.url)
+  // If any line is named, every subscription gets a set name (auto-filled).
+  if (entries.some((e) => e.group)) {
+    entries.forEach((entry, i) => {
+      params.append('group', entry.group ?? `Set ${i + 1}`)
+    })
+  }
   params.set('target', target)
   if (advanced.include.trim()) params.set('include', advanced.include.trim())
   if (advanced.exclude.trim()) params.set('exclude', advanced.exclude.trim())
@@ -45,10 +57,21 @@ export function buildConvertUrl(
   return `${origin}/api/convert?${params.toString()}`
 }
 
-/** Split the textarea value into clean subscription URLs. */
-export function parseUrlInput(value: string): string[] {
-  return value
-    .split(/[\n|]/)
-    .map((s) => s.trim())
-    .filter((s) => /^https?:\/\//i.test(s))
+/**
+ * Split the textarea value into subscription entries. Each line holds one
+ * URL, optionally prefixed with a node-set name:
+ *
+ *   https://example.com/sub          → pooled (no set)
+ *   Prime https://example.com/sub-a  → set "Prime"
+ *   Backup: https://example.com/b    → set "Backup"
+ */
+export function parseUrlInput(value: string): UrlEntry[] {
+  const entries: UrlEntry[] = []
+  for (const line of value.split('\n')) {
+    const match = line.match(/^(.*?)(https?:\/\/\S+)\s*$/i)
+    if (!match?.[2]) continue
+    const group = (match[1] ?? '').replace(/[\s:@|,=–-]+$/, '').trim()
+    entries.push(group ? { url: match[2], group } : { url: match[2] })
+  }
+  return entries
 }

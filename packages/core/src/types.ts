@@ -43,6 +43,8 @@ interface BaseNode {
   udp?: boolean
   tls?: TlsOptions
   transport?: TransportOptions
+  /** Named node set this node belongs to (e.g. "Prime", "Backup"). */
+  group?: string
 }
 
 export interface ShadowsocksNode extends BaseNode {
@@ -128,6 +130,12 @@ export interface ConvertOptions {
   exclude?: string
   /** Rename rules, `search->replace`, applied in order. Search side is a regex. */
   rename?: string[]
+  /**
+   * Named node sets, parallel to the subscription URL list. When present,
+   * each subscription's nodes are kept in their own selectable set
+   * (e.g. `['Prime', 'Backup']`) instead of being pooled together.
+   */
+  groups?: string[]
   /** Prefix prepended to every node name. */
   prefix?: string
   /** Deduplicate nodes that resolve to the same endpoint. */

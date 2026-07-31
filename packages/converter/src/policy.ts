@@ -15,6 +15,9 @@ export const FINAL_GROUP = 'Final'
 const QURE = 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color'
 const LOBE = 'https://unpkg.com/@lobehub/icons-static-png@latest/light'
 
+/** Icon for named node-set groups (matches the reference Backup group). */
+export const SET_ICON = `${QURE}/Available.png`
+
 export const GROUP_ICONS: Record<string, string> = {
   Proxy: `${QURE}/Global.png`,
   Microsoft: `${LOBE}/microsoft-color.png`,
@@ -27,21 +30,72 @@ export const GROUP_ICONS: Record<string, string> = {
   AUTO: `${QURE}/Auto.png`,
 }
 
+/**
+ * Sentinel default: resolves to the node set named "Backup" when one exists,
+ * otherwise falls back to the main Proxy group.
+ */
+export const BACKUP_SET = '@backup-set'
+
 export interface SelectorGroup {
   name: string
-  /** Option order mirrors the reference config — first entry is the default. */
+  /** Base options; named node sets are inserted right after the Proxy entry. */
   options: string[]
+  /** Default selection (rendered first — Surge/Mihomo treat first as default). */
+  defaultOption: string
 }
 
-/** Scheduling selector groups, in reference display order. */
+/**
+ * Scheduling selector groups in reference display order, with the default
+ * selections taken from the user's live panel: Microsoft/Download → DIRECT,
+ * OpenAI → Backup set, Claude/Media/Final → Proxy, Guard → REJECT.
+ */
 export const SELECTOR_GROUPS: SelectorGroup[] = [
-  { name: 'Microsoft', options: ['DIRECT', MAIN_GROUP] },
-  { name: 'OpenAI', options: ['DIRECT', MAIN_GROUP] },
-  { name: 'Claude', options: ['DIRECT', MAIN_GROUP] },
-  { name: 'Media', options: ['DIRECT', MAIN_GROUP] },
-  { name: 'Guard', options: ['DIRECT', 'REJECT', 'REJECT-DROP'] },
-  { name: FINAL_GROUP, options: ['DIRECT', MAIN_GROUP] },
+  { name: 'Microsoft', options: ['DIRECT', MAIN_GROUP], defaultOption: 'DIRECT' },
+  { name: 'OpenAI', options: ['DIRECT', MAIN_GROUP], defaultOption: BACKUP_SET },
+  { name: 'Claude', options: ['DIRECT', MAIN_GROUP], defaultOption: MAIN_GROUP },
+  { name: 'Media', options: ['DIRECT', MAIN_GROUP], defaultOption: MAIN_GROUP },
+  { name: 'Guard', options: ['DIRECT', 'REJECT', 'REJECT-DROP'], defaultOption: 'REJECT' },
+  { name: FINAL_GROUP, options: ['DIRECT', MAIN_GROUP], defaultOption: MAIN_GROUP },
 ]
+
+/**
+ * Build a selector group's option list: splice the node-set names in after
+ * Proxy, then move the resolved default to the front (first = default in
+ * Surge and Mihomo; Sing-box reads it back explicitly).
+ */
+export function selectorOptions(group: SelectorGroup, setNames: string[]): string[] {
+  const options = [...group.options]
+  const at = options.indexOf(MAIN_GROUP)
+  // Only proxy-capable groups gain the node sets (Guard stays DIRECT/REJECT).
+  if (setNames.length > 0 && at !== -1) {
+    options.splice(at + 1, 0, ...setNames)
+  }
+  let def = group.defaultOption
+  if (def === BACKUP_SET) {
+    def = setNames.find((n) => /backup/i.test(n)) ?? MAIN_GROUP
+  }
+  const idx = options.indexOf(def)
+  if (idx > 0) {
+    options.splice(idx, 1)
+    options.unshift(def)
+  }
+  return options
+}
+
+/**
+ * Group nodes by their named set, preserving set order of first appearance.
+ * Empty result means "no sets" — render the classic pooled layout.
+ */
+export function collectSets(nodes: { name: string; group?: string }[]): Map<string, string[]> {
+  const sets = new Map<string, string[]>()
+  for (const node of nodes) {
+    if (!node.group) continue
+    const members = sets.get(node.group) ?? []
+    members.push(node.name)
+    sets.set(node.group, members)
+  }
+  return sets
+}
 
 export interface RuleEntry {
   /** Stable key, used as provider / rule-set tag. */

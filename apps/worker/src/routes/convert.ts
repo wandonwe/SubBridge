@@ -34,6 +34,7 @@ export async function respondWithConversion(
       env,
       request.urls,
       request.options.userAgent,
+      request.options.groups,
     )
     const result = convert(subscription, request.target, request.options)
 

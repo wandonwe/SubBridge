@@ -132,8 +132,9 @@ describe('surge output', () => {
     expect(content).toContain('HK 01 = ss')
     expect(content).toContain('JP Hy2 = hysteria2')
     expect(content).not.toContain('US Reality =')
-    expect(content).toContain('Guard = select, DIRECT, REJECT, REJECT-DROP')
-    expect(content).toContain('Claude = select, DIRECT, Proxy')
+    expect(content).toContain('Guard = select, REJECT, DIRECT, REJECT-DROP')
+    expect(content).toContain('Claude = select, Proxy, DIRECT')
+    expect(content).toContain('Microsoft = select, DIRECT, Proxy')
     expect(content).toContain(
       'RULE-SET,https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Surge/Claude/Claude.list,Claude,update-interval=86400',
     )
@@ -153,6 +154,55 @@ describe('quantumult x output', () => {
     const { content } = convert(sub, 'quantumultx')
     expect(content).toContain('shadowsocks=hk1.example.com:8388')
     expect(content).toContain('tag=HK 01')
+  })
+})
+
+describe('named node sets', () => {
+  const grouped: Subscription = {
+    nodes: [
+      { ...(nodes[0] as ProxyNode), group: 'Prime' },
+      { ...(nodes[1] as ProxyNode), group: 'Prime' },
+      { ...(nodes[2] as ProxyNode), group: 'Backup' },
+    ],
+  }
+
+  it('mihomo keeps each set as its own group and defaults OpenAI to Backup', () => {
+    const doc = parseYaml(convert(grouped, 'mihomo').content)
+    const byName = Object.fromEntries(doc['proxy-groups'].map((g: { name: string }) => [g.name, g]))
+    expect(byName.Prime.proxies).toEqual(['HK 01', 'US Reality'])
+    expect(byName.Backup.proxies).toEqual(['JP Hy2'])
+    expect(byName.Proxy.proxies).toEqual(['AUTO', 'Prime', 'Backup', 'DIRECT'])
+    // Screenshot defaults: first entry is the default selection.
+    expect(byName.OpenAI.proxies[0]).toBe('Backup')
+    expect(byName.Claude.proxies[0]).toBe('Proxy')
+    expect(byName.Guard.proxies[0]).toBe('REJECT')
+    expect(byName.Microsoft.proxies[0]).toBe('DIRECT')
+  })
+
+  it('sing-box mirrors the sets with explicit defaults', () => {
+    const config = JSON.parse(convert(grouped, 'singbox').content)
+    const byTag = Object.fromEntries(config.outbounds.map((o: { tag: string }) => [o.tag, o]))
+    expect(byTag.Prime.outbounds).toEqual(['HK 01', 'US Reality'])
+    expect(byTag.Proxy.outbounds).toEqual(['AUTO', 'Prime', 'Backup', 'direct'])
+    expect(byTag.OpenAI.default).toBe('Backup')
+    expect(byTag.Claude.default).toBe('Proxy')
+  })
+
+  it('surge lists sets in groups and policy options', () => {
+    const { content } = convert(grouped, 'surge')
+    expect(content).toContain('Prime = select, HK 01')
+    expect(content).toContain('Backup = select, JP Hy2')
+    expect(content).toMatch(/Proxy = select, AUTO, Prime, Backup, DIRECT/)
+    expect(content).toContain('OpenAI = select, Backup, DIRECT, Proxy, Prime')
+  })
+
+  it('pools nodes as before when no sets are named', () => {
+    const doc = parseYaml(convert(sub, 'mihomo').content)
+    const proxy = doc['proxy-groups'].find((g: { name: string }) => g.name === 'Proxy')
+    expect(proxy.proxies).toEqual(['AUTO', 'HK 01', 'US Reality', 'JP Hy2', 'DIRECT'])
+    const openai = doc['proxy-groups'].find((g: { name: string }) => g.name === 'OpenAI')
+    // Without a Backup set, OpenAI falls back to Proxy as default.
+    expect(openai.proxies[0]).toBe('Proxy')
   })
 })
 

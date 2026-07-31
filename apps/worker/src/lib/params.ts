@@ -11,6 +11,22 @@ export interface ConvertRequest {
 
 export class BadRequestError extends Error {}
 
+/** Names that would collide with policy groups or built-in policies. */
+const RESERVED_GROUP_NAMES = new Set([
+  'direct',
+  'reject',
+  'reject-drop',
+  'proxy',
+  'auto',
+  'final',
+  'guard',
+  'media',
+  'microsoft',
+  'openai',
+  'claude',
+  'download',
+])
+
 /**
  * Parse and validate the /api/convert query vocabulary.
  *
@@ -36,6 +52,28 @@ export function parseConvertParams(params: URLSearchParams): ConvertRequest {
   if (!isOutputFormat(target)) throw new BadRequestError(`unknown target "${target}"`)
 
   const options: ConvertOptions = {}
+  const groups = params
+    .getAll('group')
+    .map((g) => g.trim())
+    .filter(Boolean)
+  if (groups.length > 0) {
+    if (groups.length > urls.length) {
+      throw new BadRequestError('more `group` names than `url` values')
+    }
+    for (const name of groups) {
+      if (!/^[\p{L}\p{N} _.-]{1,24}$/u.test(name)) {
+        throw new BadRequestError(`invalid group name "${name}"`)
+      }
+      if (RESERVED_GROUP_NAMES.has(name.toLowerCase())) {
+        throw new BadRequestError(`group name "${name}" is reserved`)
+      }
+    }
+    if (new Set(groups.map((g) => g.toLowerCase())).size !== groups.length) {
+      throw new BadRequestError('duplicate group names')
+    }
+    // Pad unnamed subscriptions so every URL lands in a set.
+    options.groups = urls.map((_, i) => groups[i] ?? `Set ${i + 1}`)
+  }
   const include = params.get('include')
   if (include) options.include = include
   const exclude = params.get('exclude')

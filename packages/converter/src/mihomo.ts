@@ -2,12 +2,15 @@ import type { ConvertOptions, ProxyNode } from '@subbridge/core'
 import { stringify as stringifyYaml } from 'yaml'
 import {
   AUTO_GROUP,
+  collectSets,
   FINAL_GROUP,
   GROUP_ICONS,
   MAIN_GROUP,
   PROXY_TEST_URL,
   RULES,
   SELECTOR_GROUPS,
+  SET_ICON,
+  selectorOptions,
 } from './policy'
 
 type Dict = Record<string, any>
@@ -22,18 +25,33 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
   const names = nodes.map((n) => n.name)
   const testUrl = options.testUrl ?? PROXY_TEST_URL
   const useRules = options.rules !== 'none'
+  const sets = collectSets(nodes)
+  const setNames = [...sets.keys()]
 
   const groups: Dict[] = [
     {
       name: MAIN_GROUP,
       type: 'select',
-      proxies: [...(options.urlTest !== false ? [AUTO_GROUP] : []), ...names, 'DIRECT'],
+      proxies: [
+        ...(options.urlTest !== false ? [AUTO_GROUP] : []),
+        ...(setNames.length > 0 ? setNames : names),
+        'DIRECT',
+      ],
       icon: GROUP_ICONS[MAIN_GROUP],
     },
   ]
+  // Named node sets — each subscription stays selectable as its own group.
+  for (const [setName, members] of sets) {
+    groups.push({ name: setName, type: 'select', proxies: members, icon: SET_ICON })
+  }
   if (useRules) {
     for (const g of SELECTOR_GROUPS) {
-      groups.push({ name: g.name, type: 'select', proxies: g.options, icon: GROUP_ICONS[g.name] })
+      groups.push({
+        name: g.name,
+        type: 'select',
+        proxies: selectorOptions(g, setNames),
+        icon: GROUP_ICONS[g.name],
+      })
     }
   }
   if (options.urlTest !== false) {

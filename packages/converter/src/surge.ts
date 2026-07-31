@@ -1,6 +1,7 @@
 import type { ConvertOptions, ProxyNode } from '@subbridge/core'
 import {
   AUTO_GROUP,
+  collectSets,
   FINAL_GROUP,
   GROUP_ICONS,
   INTERNET_TEST_URL,
@@ -8,6 +9,8 @@ import {
   PROXY_TEST_URL,
   RULES,
   SELECTOR_GROUPS,
+  SET_ICON,
+  selectorOptions,
   surgeRuleUrl,
 } from './policy'
 
@@ -27,6 +30,8 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
   const testUrl = options.testUrl ?? PROXY_TEST_URL
   const useRules = options.rules !== 'none'
   const useAuto = options.urlTest !== false
+  const sets = collectSets(supported)
+  const setNames = [...sets.keys()]
 
   const sections = [
     '#!MANAGED-CONFIG interval=86400 strict=false',
@@ -46,17 +51,27 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
     ...lines,
     '',
     '[Proxy Group]',
-    `${MAIN_GROUP} = select, ${useAuto ? `${AUTO_GROUP}, ` : ''}${names.join(', ')}, DIRECT, icon-url=${GROUP_ICONS[MAIN_GROUP]}`,
+    `${MAIN_GROUP} = select, ${useAuto ? `${AUTO_GROUP}, ` : ''}${(setNames.length > 0 ? setNames : names).join(', ')}, DIRECT, icon-url=${GROUP_ICONS[MAIN_GROUP]}`,
   ]
+  // Named node sets — each subscription stays selectable as its own group.
+  for (const [setName, members] of sets) {
+    sections.push(`${setName} = select, ${members.join(', ')}, icon-url=${SET_ICON}`)
+  }
   if (useRules) {
+    const download = selectorOptions(
+      { name: 'Download', options: ['DIRECT', MAIN_GROUP], defaultOption: 'DIRECT' },
+      setNames,
+    )
     for (const g of SELECTOR_GROUPS) {
       // Insert Download (macOS) between Claude and Media, as in the reference.
       if (g.name === 'Media') {
         sections.push(
-          `Download = select, DIRECT, ${MAIN_GROUP}, icon-url=${GROUP_ICONS.Download} #!MACOS-ONLY`,
+          `Download = select, ${download.join(', ')}, icon-url=${GROUP_ICONS.Download} #!MACOS-ONLY`,
         )
       }
-      sections.push(`${g.name} = select, ${g.options.join(', ')}, icon-url=${GROUP_ICONS[g.name]}`)
+      sections.push(
+        `${g.name} = select, ${selectorOptions(g, setNames).join(', ')}, icon-url=${GROUP_ICONS[g.name]}`,
+      )
     }
   }
   if (useAuto) {

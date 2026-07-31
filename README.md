@@ -69,6 +69,7 @@ format is rendered from it — adding a client is a single new renderer.
 | Param | Description |
 | --- | --- |
 | `url` | Subscription URL — repeatable (or `\|`-separated) to merge |
+| `group` | Named node set per `url` (repeatable, e.g. `group=Prime&group=Backup`) — keeps each subscription's nodes in its own selectable group |
 | `target` | `mihomo` `singbox` `shadowrocket` `surge` `quantumultx` `base64` `sharelink` |
 | `include` / `exclude` | Regex filters on node names |
 | `rename` | `search->replace` rule, repeatable, regex supported |

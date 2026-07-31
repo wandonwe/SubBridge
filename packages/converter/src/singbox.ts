@@ -1,11 +1,13 @@
 import type { ConvertOptions, ProxyNode } from '@subbridge/core'
 import {
   AUTO_GROUP,
+  collectSets,
   FINAL_GROUP,
   MAIN_GROUP,
   PROXY_TEST_URL,
   RULES,
   SELECTOR_GROUPS,
+  selectorOptions,
 } from './policy'
 
 type Dict = Record<string, any>
@@ -23,22 +25,33 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
   const outbounds = nodes.map(toSingboxOutbound)
   const names = nodes.map((n) => n.name)
   const useRules = options.rules !== 'none'
+  const sets = collectSets(nodes)
+  const setNames = [...sets.keys()]
 
   const selector: Dict = {
     type: 'selector',
     tag: MAIN_GROUP,
-    outbounds: [...(options.urlTest !== false ? [AUTO_GROUP] : []), ...names, 'direct'],
-    default: options.urlTest !== false ? AUTO_GROUP : names[0],
+    outbounds: [
+      ...(options.urlTest !== false ? [AUTO_GROUP] : []),
+      ...(setNames.length > 0 ? setNames : names),
+      'direct',
+    ],
+    default: options.urlTest !== false ? AUTO_GROUP : (setNames[0] ?? names[0]),
   }
   const groupOutbounds: Dict[] = [selector]
+  // Named node sets — each subscription stays selectable as its own group.
+  for (const [setName, members] of sets) {
+    groupOutbounds.push({ type: 'selector', tag: setName, outbounds: members })
+  }
   if (useRules) {
     for (const g of SELECTOR_GROUPS) {
       if (g.name === 'Guard') continue // handled via the `reject` route action
+      const opts = selectorOptions(g, setNames).map((o) => (o === 'DIRECT' ? 'direct' : o))
       groupOutbounds.push({
         type: 'selector',
         tag: g.name,
-        outbounds: g.options.map((o) => (o === 'DIRECT' ? 'direct' : o)),
-        default: 'direct',
+        outbounds: opts,
+        default: opts[0],
       })
     }
   }

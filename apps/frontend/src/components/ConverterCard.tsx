@@ -65,10 +65,14 @@ export function ConverterCard({ onGenerated, onShowQr }: Props) {
             Subscription URL
           </span>
           <Textarea
-            placeholder={'https://example.com/your-subscription\nPaste multiple URLs to merge them'}
+            placeholder={
+              'https://example.com/your-subscription\n' +
+              'Merge more by adding lines — name them to keep separate sets:\n' +
+              'Prime https://example.com/sub-a\nBackup https://example.com/sub-b'
+            }
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            rows={3}
+            rows={4}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
@@ -77,6 +81,8 @@ export function ConverterCard({ onGenerated, onShowQr }: Props) {
           {urls.length > 1 && (
             <span className="mt-1.5 block text-[13px] text-[--color-label-secondary]">
               {urls.length} subscriptions will be merged
+              {urls.some((u) => u.group) &&
+                ` into sets: ${urls.map((u, i) => u.group ?? `Set ${i + 1}`).join(', ')}`}
             </span>
           )}
         </label>
