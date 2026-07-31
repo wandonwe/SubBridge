@@ -13,6 +13,9 @@ name: Deploy
 #   API_DOMAIN             — (optional) custom API hostname, e.g.
 #                            api.example.com; if unset, the fork's own
 #                            workers.dev subdomain is used automatically
+#   CORS_ORIGINS           — (optional) comma-separated allowed origins to
+#                            restrict the API; if unset, any origin (*) is
+#                            allowed
 
 on:
   push:
@@ -63,6 +66,18 @@ jobs:
             echo "Using KV namespace $ID"
           else
             echo "KV namespace id already configured."
+          fi
+
+      - name: Apply CORS whitelist (when CORS_ORIGINS is configured)
+        working-directory: apps/worker
+        env:
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+        run: |
+          if [ -n "$CORS_ORIGINS" ]; then
+            sed -i "s|^CORS_ORIGINS = .*|CORS_ORIGINS = \"$CORS_ORIGINS\"|" wrangler.toml
+            echo "CORS restricted to: $CORS_ORIGINS"
+          else
+            echo "CORS_ORIGINS not set — allowing any origin (*)."
           fi
 
       - name: Deploy to Cloudflare Workers

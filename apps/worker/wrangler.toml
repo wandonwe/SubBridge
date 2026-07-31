@@ -14,6 +14,9 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
 [vars]
 # Comma-separated origin whitelist for CORS. "*" allows any origin.
+# To restrict to your own site without editing this file, add a GitHub
+# Actions secret named CORS_ORIGINS (e.g. https://sub.example.com); the
+# deploy workflow will apply it automatically.
 CORS_ORIGINS = "*"
 # Requests per minute per client IP for /api/* (0 disables rate limiting).
 RATE_LIMIT_PER_MINUTE = "60"

@@ -44,6 +44,7 @@ secret**. Add:
 | `CLOUDFLARE_ACCOUNT_ID` | ✅ | your account id from step 2 |
 | `SUBBRIDGE_SECRET` | optional | any long random string — enables encrypted short links |
 | `API_DOMAIN` | optional | a custom API hostname like `api.example.com` (see below) |
+| `CORS_ORIGINS` | optional | comma-separated origins to lock the API to your site, e.g. `https://sub.example.com`; unset means any origin |
 
 > Generate a good `SUBBRIDGE_SECRET` with:
 > `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
