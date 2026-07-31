@@ -1,0 +1,17 @@
+{
+  "name": "@subbridge/utils",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runtime-agnostic helpers (base64, url, hashing) for SubBridge",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

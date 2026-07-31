@@ -1,0 +1,26 @@
+# SubBridge edge API
+name = "subbridge-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+
+# Required: KV namespace for caching, short links and rate limiting.
+# Create with:  wrangler kv namespace create SUBBRIDGE_KV
+[[kv_namespaces]]
+binding = "SUBBRIDGE_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+# Comma-separated origin whitelist for CORS. "*" allows any origin.
+CORS_ORIGINS = "*"
+# Requests per minute per client IP for /api/* (0 disables rate limiting).
+RATE_LIMIT_PER_MINUTE = "60"
+# Upstream subscription cache TTL in seconds.
+UPSTREAM_CACHE_TTL = "300"
+
+# Secrets (set with `wrangler secret put <NAME>`):
+#   SECRET     — encryption key for short links (required for POST /api/short)
+#   API_TOKEN  — optional bearer token; when set, /api/convert and /api/short
+#                require it via `Authorization: Bearer` or `?token=`
+
+[observability]
+enabled = true

@@ -1,0 +1,22 @@
+{
+  "name": "@subbridge/converter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Renders canonical SubBridge nodes into client-specific formats",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@subbridge/core": "workspace:*",
+    "@subbridge/utils": "workspace:*",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

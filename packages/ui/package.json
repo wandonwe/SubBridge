@@ -1,0 +1,26 @@
+{
+  "name": "@subbridge/ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Apple-style glass UI primitives shared across SubBridge apps",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.1"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.9",
+    "react": "^19.2.4",
+    "typescript": "^5.9.3"
+  }
+}

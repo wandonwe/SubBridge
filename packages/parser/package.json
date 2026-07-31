@@ -1,0 +1,22 @@
+{
+  "name": "@subbridge/parser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Parses subscriptions and share links into the canonical SubBridge node model",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@subbridge/core": "workspace:*",
+    "@subbridge/utils": "workspace:*",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
