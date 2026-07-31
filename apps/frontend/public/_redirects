@@ -1,5 +1,9 @@
-# Cloudflare Pages: proxy API calls to the worker's custom domain.
-/api/*  https://api.healthicare.top/api/:splat  200
+# Cloudflare Pages: proxy /api/* to the Worker.
+# The deploy workflow rewrites API_ENDPOINT automatically:
+#   - to the API_DOMAIN secret if you set one (e.g. api.example.com), or
+#   - to this fork's own <worker>.<subdomain>.workers.dev otherwise.
+# Forks need to change nothing here.
+/api/*  https://API_ENDPOINT/api/:splat  200
 
 # SPA fallback
 /*      /index.html   200

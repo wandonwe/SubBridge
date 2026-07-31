@@ -94,7 +94,28 @@ pass-through and honour `If-None-Match` with `304`.
 The stored payload is sealed with AES-256-GCM using your `SECRET` — a KV dump
 reveals nothing about the original subscription.
 
-## Deployment
+## Deploy your own
+
+SubBridge is built to be forked. **Fork the repo, add three Cloudflare secrets,
+push** — a GitHub Action provisions storage, deploys the API and the site to
+your own Cloudflare account, and wires them together. No VPS, no code changes.
+
+👉 **Full walkthrough: [DEPLOY.md](DEPLOY.md)**
+
+Quick version:
+
+1. Fork this repository.
+2. Create a Cloudflare API token (permissions: Workers Scripts:Edit, Workers KV
+   Storage:Edit, Cloudflare Pages:Edit) and grab your Account ID.
+3. In your fork → Settings → Secrets and variables → Actions, add
+   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and (optional)
+   `SUBBRIDGE_SECRET` for encrypted short links.
+4. Push, or run the **Deploy** workflow from the Actions tab.
+
+Your instance comes up at `subbridge.pages.dev` with the API on your own
+`workers.dev` subdomain. Bring your own domain anytime — see DEPLOY.md.
+
+## Deployment (details)
 
 ### 1. Worker (API)
 

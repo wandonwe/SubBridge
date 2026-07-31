@@ -10,6 +10,9 @@ name: Deploy
 #   CLOUDFLARE_ACCOUNT_ID  — Cloudflare account id
 #   SUBBRIDGE_SECRET       — (optional) long random string for encrypted
 #                            short links; set once and never rotate casually
+#   API_DOMAIN             — (optional) custom API hostname, e.g.
+#                            api.example.com; if unset, the fork's own
+#                            workers.dev subdomain is used automatically
 
 on:
   push:
@@ -97,17 +100,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Point /api at the workers.dev subdomain
+      - name: Resolve API endpoint for the frontend
+        env:
+          API_DOMAIN: ${{ secrets.API_DOMAIN }}
         run: |
-          SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
-            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).result?.subdomain??'')}catch{console.log('')}})")
-          if [ -n "$SUB" ]; then
-            sed -i "s/YOUR_SUBDOMAIN/$SUB/" apps/frontend/public/_redirects
-            echo "API proxied to https://subbridge-api.$SUB.workers.dev"
+          if [ -n "$API_DOMAIN" ]; then
+            ENDPOINT="$API_DOMAIN"
+            echo "Using custom API domain: $ENDPOINT"
           else
-            echo "::warning::could not resolve workers.dev subdomain — edit apps/frontend/public/_redirects manually"
+            SUB=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).result?.subdomain??'')}catch{console.log('')}})")
+            if [ -z "$SUB" ]; then
+              echo "::error::could not resolve workers.dev subdomain and no API_DOMAIN set"; exit 1
+            fi
+            ENDPOINT="subbridge-api.$SUB.workers.dev"
+            echo "Using workers.dev endpoint: $ENDPOINT"
           fi
+          # Escape slashes/dots are fine here; endpoint is a bare hostname.
+          sed -i "s|API_ENDPOINT|$ENDPOINT|" apps/frontend/public/_redirects
+          echo "API proxied to https://$ENDPOINT"
 
       - name: Build frontend
         run: pnpm --filter @subbridge/frontend build
