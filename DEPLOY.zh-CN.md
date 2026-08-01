@@ -43,6 +43,7 @@ SubBridge 完全运行在 Cloudflare 免费套餐上。Fork 本仓库,几分钟�
 | `SUBBRIDGE_SECRET` | 可选 | 任意长随机字符串——启用加密短链 |
 | `API_DOMAIN` | 可选 | 自定义 API 域名,如 `api.example.com`(见下文) |
 | `CORS_ORIGINS` | 可选 | 逗号分隔的来源白名单,如 `https://sub.example.com`;不设则允许任意来源 |
+| `PAGES_PROJECT` | 可选 | Pages 项目名 = `<名字>.pages.dev`(全球唯一);默认 `subbridge-<账户ID前8位>` |
 
 > 生成高强度 `SUBBRIDGE_SECRET`:
 > `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
@@ -60,7 +61,7 @@ SubBridge 完全运行在 Cloudflare 免费套餐上。Fork 本仓库,几分钟�
 
 跑绿之后,你的地址是:
 
-- **网站** —— `https://subbridge.pages.dev`(或你绑定的 Pages 自定义域名)
+- **网站** —— `https://<项目名>.pages.dev`(默认 `subbridge-<账户ID前8位>.pages.dev`;pages.dev 名称全球唯一,所以默认按账号生成,fork 之间不会冲突)
 - **API** —— `https://subbridge-api.<你的子域>.workers.dev`
 
 验证:访问 `https://<你的API>/api/version`,返回 JSON 即部署成功。

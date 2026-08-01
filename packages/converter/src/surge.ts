@@ -35,6 +35,7 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
   const preset: RulePreset =
     options.rules === 'lite' || options.rules === 'full' ? options.rules : 'default'
   const useAuto = options.urlTest !== false
+  const useFallback = options.fallback !== false
   const sets = orderedSets(collectSets(supported), options.setStrategies)
   const setNames = sets.map((s) => s.name)
   const poolNames = setNames.length > 0 ? setNames : names
@@ -57,7 +58,7 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
     ...lines,
     '',
     '[Proxy Group]',
-    `${MAIN_GROUP} = select, ${useAuto ? `${AUTO_GROUP}, ${FALLBACK_GROUP}, ` : ''}${poolNames.join(', ')}, DIRECT, icon-url=${GROUP_ICONS[MAIN_GROUP]}`,
+    `${MAIN_GROUP} = select, ${useAuto ? `${AUTO_GROUP}, ` : ''}${useFallback ? `${FALLBACK_GROUP}, ` : ''}${poolNames.join(', ')}, DIRECT, icon-url=${GROUP_ICONS[MAIN_GROUP]}`,
   ]
   if (useRules) {
     const download = selectorOptions(
@@ -81,6 +82,10 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
   if (useAuto) {
     sections.push(
       `${AUTO_GROUP} = url-test, ${names.join(', ')}, url=${testUrl}, interval=300, icon-url=${GROUP_ICONS[AUTO_GROUP]}`,
+    )
+  }
+  if (useFallback) {
+    sections.push(
       `${FALLBACK_GROUP} = fallback, ${poolNames.join(', ')}, url=${testUrl}, interval=600, timeout=5, icon-url=${GROUP_ICONS[FALLBACK_GROUP]}`,
     )
   }

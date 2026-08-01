@@ -43,8 +43,7 @@ Backup https://example.com/sub-b
 ```
 
 This produces `Prime` and `Backup` groups in the client; every policy group
-(OpenAI, Media, …) can point at a specific set. A set named `Backup` is
-automatically the default for the OpenAI policy.
+(OpenAI, Media, …) can point at a specific set.
 
 ### Per-set scheduling strategy
 
@@ -101,7 +100,8 @@ themselves daily on the client.
 | Name prefix | Prepended to every node name |
 | Deduplicate nodes | Drop nodes with identical endpoints |
 | Sort by name | Alphabetical node order |
-| Auto url-test group | Toggle the AUTO / FALLBACK pools |
+| Auto url-test group | Toggle the AUTO pool (on by default) |
+| Fallback group | Toggle the FALLBACK pool (on by default) |
 
 ## API (for scripts and clients)
 
@@ -118,7 +118,7 @@ https://<your-api>/api/convert
   &rules=full                      # lite | default | full | none
   &include=HK|SG &exclude=expired
   &rename=香港->HK &prefix=[SB]%20
-  &dedupe=1 &sort=1 &urltest=0
+  &dedupe=1 &sort=1 &urltest=0 &fallback=0
   &ua=<custom-upstream-user-agent>
   &token=<api-token-if-configured>
 ```

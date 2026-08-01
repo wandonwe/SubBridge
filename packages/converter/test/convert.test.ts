@@ -98,9 +98,23 @@ describe('mihomo output', () => {
   })
 
   it('omits policy groups and rules when disabled', () => {
-    const doc = parseYaml(convert(sub, 'mihomo', { urlTest: false, rules: 'none' }).content)
+    const doc = parseYaml(
+      convert(sub, 'mihomo', { urlTest: false, fallback: false, rules: 'none' }).content,
+    )
     expect(doc['proxy-groups']).toHaveLength(1)
     expect(doc.rules).toEqual(['MATCH,Proxy'])
+  })
+
+  it('AUTO and FALLBACK pools toggle independently', () => {
+    const noAuto = parseYaml(convert(sub, 'mihomo', { urlTest: false }).content)
+    const namesNoAuto = noAuto['proxy-groups'].map((g: { name: string }) => g.name)
+    expect(namesNoAuto).not.toContain('AUTO')
+    expect(namesNoAuto).toContain('FALLBACK')
+
+    const noFallback = parseYaml(convert(sub, 'mihomo', { fallback: false }).content)
+    const namesNoFb = noFallback['proxy-groups'].map((g: { name: string }) => g.name)
+    expect(namesNoFb).toContain('AUTO')
+    expect(namesNoFb).not.toContain('FALLBACK')
   })
 
   it('full preset adds detail rules, Games group and Telegram IP ranges', () => {
@@ -203,15 +217,15 @@ describe('named node sets', () => {
     ],
   }
 
-  it('mihomo keeps each set as its own group and defaults OpenAI to Backup', () => {
+  it('mihomo keeps each set as its own group with the agreed defaults', () => {
     const doc = parseYaml(convert(grouped, 'mihomo').content)
     const byName = Object.fromEntries(doc['proxy-groups'].map((g: { name: string }) => [g.name, g]))
     expect(byName.Prime.proxies).toEqual(['HK 01', 'US Reality'])
     expect(byName.Backup.proxies).toEqual(['JP Hy2'])
     expect(byName.Proxy.proxies).toEqual(['AUTO', 'FALLBACK', 'Prime', 'Backup', 'DIRECT'])
     expect(byName.FALLBACK).toMatchObject({ type: 'fallback', proxies: ['Prime', 'Backup'] })
-    // Screenshot defaults: first entry is the default selection.
-    expect(byName.OpenAI.proxies[0]).toBe('Backup')
+    // First entry is the default selection.
+    expect(byName.OpenAI.proxies[0]).toBe('Proxy')
     expect(byName.Claude.proxies[0]).toBe('Proxy')
     expect(byName.Guard.proxies[0]).toBe('REJECT')
     expect(byName.Microsoft.proxies[0]).toBe('DIRECT')
@@ -255,7 +269,7 @@ describe('named node sets', () => {
     const byTag = Object.fromEntries(config.outbounds.map((o: { tag: string }) => [o.tag, o]))
     expect(byTag.Prime.outbounds).toEqual(['HK 01', 'US Reality'])
     expect(byTag.Proxy.outbounds).toEqual(['AUTO', 'Prime', 'Backup', 'direct'])
-    expect(byTag.OpenAI.default).toBe('Backup')
+    expect(byTag.OpenAI.default).toBe('Proxy')
     expect(byTag.Claude.default).toBe('Proxy')
   })
 
@@ -264,7 +278,7 @@ describe('named node sets', () => {
     expect(content).toContain('Prime = select, HK 01')
     expect(content).toContain('Backup = select, JP Hy2')
     expect(content).toMatch(/Proxy = select, AUTO, FALLBACK, Prime, Backup, DIRECT/)
-    expect(content).toContain('OpenAI = select, Backup, DIRECT, Proxy, Prime')
+    expect(content).toContain('OpenAI = select, Proxy, DIRECT, Prime, Backup')
   })
 
   it('pools nodes as before when no sets are named', () => {

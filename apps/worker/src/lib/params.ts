@@ -107,6 +107,7 @@ export function parseConvertParams(params: URLSearchParams): ConvertRequest {
   if (flag(params, 'dedupe')) options.dedupe = true
   if (flag(params, 'sort')) options.sort = true
   if (params.get('urltest') !== null) options.urlTest = flag(params, 'urltest')
+  if (params.get('fallback') !== null) options.fallback = flag(params, 'fallback')
   const rules = params.get('rules')
   if (rules === 'none' || rules === 'default' || rules === 'lite' || rules === 'full') {
     options.rules = rules

@@ -16,6 +16,8 @@ name: Deploy
 #   CORS_ORIGINS           — (optional) comma-separated allowed origins to
 #                            restrict the API; if unset, any origin (*) is
 #                            allowed
+#   PAGES_PROJECT          — (optional) Pages project name (= <name>.pages.dev,
+#                            globally unique); default subbridge-<account:8>
 
 on:
   push:
@@ -141,8 +143,19 @@ jobs:
           VITE_API_BASE: ${{ env.VITE_API_BASE }}
         run: pnpm --filter @subbridge/frontend build
 
+      - name: Resolve Pages project name
+        env:
+          PAGES_PROJECT: ${{ secrets.PAGES_PROJECT }}
+        run: |
+          # pages.dev subdomains are GLOBALLY unique, so default to a name
+          # derived from the account id — forks never collide. Set the
+          # PAGES_PROJECT secret to pick your own name.
+          PROJECT="${PAGES_PROJECT:-subbridge-${CLOUDFLARE_ACCOUNT_ID:0:8}}"
+          echo "PAGES_PROJECT_NAME=$PROJECT" >> "$GITHUB_ENV"
+          echo "Deploying Pages project: $PROJECT"
+
       - name: Ensure Pages project exists
-        run: pnpm --dir apps/worker exec wrangler pages project create subbridge --production-branch=main || true
+        run: pnpm --dir apps/worker exec wrangler pages project create "$PAGES_PROJECT_NAME" --production-branch=main || true
 
       - name: Deploy to Cloudflare Pages
-        run: pnpm --dir apps/worker exec wrangler pages deploy ../frontend/dist --project-name=subbridge
+        run: pnpm --dir apps/worker exec wrangler pages deploy ../frontend/dist --project-name="$PAGES_PROJECT_NAME"

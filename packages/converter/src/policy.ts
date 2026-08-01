@@ -52,13 +52,13 @@ export interface SelectorGroup {
 }
 
 /**
- * Scheduling selector groups in reference display order, with the default
- * selections taken from the user's live panel: Microsoft/Download → DIRECT,
- * OpenAI → Backup set, Claude/Media/Final → Proxy, Guard → REJECT.
+ * Scheduling selector groups in reference display order. Defaults:
+ * Microsoft/Download → DIRECT, OpenAI/Claude/Media/Final → Proxy,
+ * Guard → REJECT.
  */
 export const SELECTOR_GROUPS: SelectorGroup[] = [
   { name: 'Microsoft', options: ['DIRECT', MAIN_GROUP], defaultOption: 'DIRECT' },
-  { name: 'OpenAI', options: ['DIRECT', MAIN_GROUP], defaultOption: BACKUP_SET },
+  { name: 'OpenAI', options: ['DIRECT', MAIN_GROUP], defaultOption: MAIN_GROUP },
   { name: 'Claude', options: ['DIRECT', MAIN_GROUP], defaultOption: MAIN_GROUP },
   { name: 'Media', options: ['DIRECT', MAIN_GROUP], defaultOption: MAIN_GROUP },
   { name: 'Guard', options: ['DIRECT', 'REJECT', 'REJECT-DROP'], defaultOption: 'REJECT' },

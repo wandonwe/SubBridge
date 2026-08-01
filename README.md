@@ -8,6 +8,8 @@ A modern, lightweight and secure subscription conversion platform for
 Mihomo (Clash Verge), Sing-box, Hiddify, Shadowrocket, Surge and Quantumult X —
 running entirely on Cloudflare Pages + Workers. No VPS required.
 
+**English** · [简体中文](README.zh-CN.md)
+
 **Docs:** [Deploy Guide](DEPLOY.md) ([中文](DEPLOY.zh-CN.md)) · [Usage Guide](USAGE.md) ([中文](USAGE.zh-CN.md))
 
 </div>

@@ -11,6 +11,7 @@ export interface AdvancedOptions {
   dedupe: boolean
   sort: boolean
   urlTest: boolean
+  fallback: boolean
   rules: RulePresetOption
 }
 
@@ -22,6 +23,7 @@ export const DEFAULT_ADVANCED: AdvancedOptions = {
   dedupe: false,
   sort: false,
   urlTest: true,
+  fallback: true,
   rules: 'default',
 }
 
@@ -69,6 +71,7 @@ export function buildConvertUrl(
   if (advanced.dedupe) params.set('dedupe', '1')
   if (advanced.sort) params.set('sort', '1')
   if (!advanced.urlTest) params.set('urltest', '0')
+  if (!advanced.fallback) params.set('fallback', '0')
   if (advanced.rules !== 'default') params.set('rules', advanced.rules)
   return `${origin}/api/convert?${params.toString()}`
 }

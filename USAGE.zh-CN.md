@@ -41,7 +41,7 @@ Backup https://example.com/sub-b
 ```
 
 客户端里会出现 `Prime` 和 `Backup` 两个组;每个策略组(OpenAI、Media 等)
-都可以单独指定走某个集。名为 `Backup` 的集会自动成为 OpenAI 策略的默认选项。
+都可以单独指定走某个集。
 
 ### 每个集的调度策略
 
@@ -97,7 +97,8 @@ Other https://example.com/sub-c             ← 手动选择(默认)
 | Name prefix | 给所有节点名加前缀 |
 | Deduplicate nodes | 去除服务器端点重复的节点 |
 | Sort by name | 节点按名称排序 |
-| Auto url-test group | 开关 AUTO / FALLBACK 节点池 |
+| Auto url-test group | 开关 AUTO 自动测速池(默认开) |
+| Fallback group | 开关 FALLBACK 故障转移池(默认开) |
 
 ## API(供脚本和客户端直接调用)
 
@@ -114,7 +115,7 @@ https://<你的API>/api/convert
   &rules=full                      # lite | default | full | none
   &include=HK|SG &exclude=到期
   &rename=香港->HK &prefix=[SB]%20
-  &dedupe=1 &sort=1 &urltest=0
+  &dedupe=1 &sort=1 &urltest=0 &fallback=0
   &ua=<自定义上游 User-Agent>
   &token=<如果实例设置了访问令牌>
 ```

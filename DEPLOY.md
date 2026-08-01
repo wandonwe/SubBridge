@@ -47,6 +47,7 @@ secret**. Add:
 | `SUBBRIDGE_SECRET` | optional | any long random string — enables encrypted short links |
 | `API_DOMAIN` | optional | a custom API hostname like `api.example.com` (see below) |
 | `CORS_ORIGINS` | optional | comma-separated origins to lock the API to your site, e.g. `https://sub.example.com`; unset means any origin |
+| `PAGES_PROJECT` | optional | Pages project name = `<name>.pages.dev` (globally unique); default `subbridge-<first 8 chars of your account id>` |
 
 > Generate a good `SUBBRIDGE_SECRET` with:
 > `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
@@ -64,7 +65,7 @@ workflow**. The workflow will, on its own:
 
 When it goes green, your URLs are:
 
-- **Site** — `https://subbridge.pages.dev` (or your Pages custom domain)
+- **Site** — `https://<pages-project>.pages.dev` (default `subbridge-<account:8>.pages.dev`; pages.dev names are globally unique, hence the per-account default)
 - **API** — `https://subbridge-api.<your-subdomain>.workers.dev`
 
 Verify the API with `https://<your-api>/api/version` — it should return JSON.

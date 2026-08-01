@@ -32,6 +32,7 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
   const preset: RulePreset =
     options.rules === 'lite' || options.rules === 'full' ? options.rules : 'default'
   const useAuto = options.urlTest !== false
+  const useFallback = options.fallback !== false
   const sets = orderedSets(collectSets(nodes), options.setStrategies)
   const setNames = sets.map((s) => s.name)
   const poolNames = setNames.length > 0 ? setNames : names
@@ -40,7 +41,12 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
     {
       name: MAIN_GROUP,
       type: 'select',
-      proxies: [...(useAuto ? [AUTO_GROUP, FALLBACK_GROUP] : []), ...poolNames, 'DIRECT'],
+      proxies: [
+        ...(useAuto ? [AUTO_GROUP] : []),
+        ...(useFallback ? [FALLBACK_GROUP] : []),
+        ...poolNames,
+        'DIRECT',
+      ],
       icon: GROUP_ICONS[MAIN_GROUP],
     },
   ]
@@ -67,6 +73,8 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
       proxies: names,
       icon: GROUP_ICONS[AUTO_GROUP],
     })
+  }
+  if (useFallback) {
     groups.push({
       name: FALLBACK_GROUP,
       type: 'fallback',

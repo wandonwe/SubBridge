@@ -156,8 +156,10 @@ export interface ConvertOptions {
   dedupe?: boolean
   /** Sort nodes alphabetically by name. */
   sort?: boolean
-  /** Emit url-test / auto-select groups (mihomo, sing-box, surge). */
+  /** Emit the AUTO url-test pool (mihomo, sing-box, surge). Default on. */
   urlTest?: boolean
+  /** Emit the FALLBACK failover pool (mihomo, surge). Default on. */
+  fallback?: boolean
   /** URL used by health-check groups. */
   testUrl?: string
   /**

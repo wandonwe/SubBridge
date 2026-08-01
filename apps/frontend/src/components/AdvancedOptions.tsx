@@ -102,6 +102,7 @@ export function AdvancedOptions({ value, onChange }: Props) {
                     ['dedupe', 'Deduplicate nodes'],
                     ['sort', 'Sort by name'],
                     ['urlTest', 'Auto url-test group'],
+                    ['fallback', 'Fallback group'],
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key} className="flex items-center justify-between gap-3">
