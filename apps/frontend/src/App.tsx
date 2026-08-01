@@ -3,13 +3,10 @@ import { useState } from 'react'
 import { ConverterCard } from '@/components/ConverterCard'
 import { FeatureGrid } from '@/components/FeatureGrid'
 import { Footer } from '@/components/Footer'
-import { HistoryList } from '@/components/HistoryList'
 import { Nav } from '@/components/Nav'
 import { QrModal } from '@/components/QrModal'
-import { loadHistory } from '@/lib/history'
 
 export default function App() {
-  const [history, setHistory] = useState(loadHistory)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
 
   return (
@@ -56,10 +53,8 @@ export default function App() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2, ease: [0.32, 0.72, 0, 1] }}
         >
-          <ConverterCard onGenerated={setHistory} onShowQr={setQrUrl} />
+          <ConverterCard onShowQr={setQrUrl} />
         </motion.section>
-
-        <HistoryList entries={history} onChange={setHistory} onShowQr={setQrUrl} />
 
         <FeatureGrid />
 

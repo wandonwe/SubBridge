@@ -3,14 +3,18 @@ import { stringify as stringifyYaml } from 'yaml'
 import {
   AUTO_GROUP,
   collectSets,
+  FALLBACK_GROUP,
   FINAL_GROUP,
   GROUP_ICONS,
   MAIN_GROUP,
+  orderedSets,
   PROXY_TEST_URL,
-  RULES,
-  SELECTOR_GROUPS,
-  SET_ICON,
+  type RulePreset,
+  rulesForPreset,
+  STRATEGY_ICONS,
+  selectorGroupsForPreset,
   selectorOptions,
+  TELEGRAM_IP_KEY,
 } from './policy'
 
 type Dict = Record<string, any>
@@ -25,27 +29,23 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
   const names = nodes.map((n) => n.name)
   const testUrl = options.testUrl ?? PROXY_TEST_URL
   const useRules = options.rules !== 'none'
-  const sets = collectSets(nodes)
-  const setNames = [...sets.keys()]
+  const preset: RulePreset =
+    options.rules === 'lite' || options.rules === 'full' ? options.rules : 'default'
+  const useAuto = options.urlTest !== false
+  const sets = orderedSets(collectSets(nodes), options.setStrategies)
+  const setNames = sets.map((s) => s.name)
+  const poolNames = setNames.length > 0 ? setNames : names
 
   const groups: Dict[] = [
     {
       name: MAIN_GROUP,
       type: 'select',
-      proxies: [
-        ...(options.urlTest !== false ? [AUTO_GROUP] : []),
-        ...(setNames.length > 0 ? setNames : names),
-        'DIRECT',
-      ],
+      proxies: [...(useAuto ? [AUTO_GROUP, FALLBACK_GROUP] : []), ...poolNames, 'DIRECT'],
       icon: GROUP_ICONS[MAIN_GROUP],
     },
   ]
-  // Named node sets — each subscription stays selectable as its own group.
-  for (const [setName, members] of sets) {
-    groups.push({ name: setName, type: 'select', proxies: members, icon: SET_ICON })
-  }
   if (useRules) {
-    for (const g of SELECTOR_GROUPS) {
+    for (const g of selectorGroupsForPreset(preset)) {
       groups.push({
         name: g.name,
         type: 'select',
@@ -54,16 +54,45 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
       })
     }
   }
-  if (options.urlTest !== false) {
+  // Node pools sit below the policy groups: AUTO, FALLBACK, then the named
+  // sets ordered auto → fallback → select. `lazy` keeps idle groups quiet.
+  if (useAuto) {
     groups.push({
       name: AUTO_GROUP,
       type: 'url-test',
       url: testUrl,
       interval: 300,
       tolerance: 50,
+      lazy: true,
       proxies: names,
       icon: GROUP_ICONS[AUTO_GROUP],
     })
+    groups.push({
+      name: FALLBACK_GROUP,
+      type: 'fallback',
+      url: testUrl,
+      interval: 300,
+      lazy: true,
+      proxies: poolNames,
+      icon: GROUP_ICONS[FALLBACK_GROUP],
+    })
+  }
+  for (const set of sets) {
+    const base: Dict = { name: set.name, proxies: set.members, icon: STRATEGY_ICONS[set.strategy] }
+    if (set.strategy === 'auto') {
+      groups.push({
+        ...base,
+        type: 'url-test',
+        url: testUrl,
+        interval: 300,
+        tolerance: 50,
+        lazy: true,
+      })
+    } else if (set.strategy === 'fallback') {
+      groups.push({ ...base, type: 'fallback', url: testUrl, interval: 300, lazy: true })
+    } else {
+      groups.push({ ...base, type: 'select' })
+    }
   }
 
   const config: Dict = {
@@ -92,10 +121,16 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
       'DOMAIN-SUFFIX,invalid,DIRECT',
       'RULE-SET,private,DIRECT',
     ]
-    for (const entry of RULES) {
+    for (const entry of rulesForPreset(preset)) {
       if (!entry.geosite) continue // Surge-only list (e.g. Hijacking) without a geosite twin
       providers[entry.key] = ruleProvider(entry.geosite)
       rules.push(`RULE-SET,${entry.key},${entry.policy}`)
+      // Telegram speaks to hard-coded IPs — cover them right after the
+      // domain rule. `no-resolve` keeps it free of extra DNS lookups.
+      if (entry.key === 'telegram' && preset === 'full') {
+        providers[TELEGRAM_IP_KEY] = geoipProvider('telegram')
+        rules.push(`RULE-SET,${TELEGRAM_IP_KEY},${MAIN_GROUP},no-resolve`)
+      }
     }
     rules.push('GEOIP,LAN,DIRECT', 'GEOIP,CN,DIRECT', `MATCH,${FINAL_GROUP}`)
     config['rule-providers'] = providers
@@ -114,6 +149,17 @@ function ruleProvider(geosite: string): Dict {
     format: 'mrs',
     url: `https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/${geosite}.mrs`,
     path: `./rule-providers/${geosite}.mrs`,
+    interval: 86400,
+  }
+}
+
+function geoipProvider(name: string): Dict {
+  return {
+    type: 'http',
+    behavior: 'ipcidr',
+    format: 'mrs',
+    url: `https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/${name}.mrs`,
+    path: `./rule-providers/geoip-${name}.mrs`,
     interval: 86400,
   }
 }

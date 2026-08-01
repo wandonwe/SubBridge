@@ -8,6 +8,15 @@ import { loadSubscriptions, UpstreamError } from '../lib/upstream'
 export const convertRoute = new Hono<AppContext>()
 
 /**
+ * Build a Content-Disposition header carrying the profile name, with an
+ * ASCII fallback and an RFC 5987 UTF-8 field so names like "医疗节点" survive.
+ */
+function contentDisposition(name: string): string {
+  const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '') || 'SubBridge'
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`
+}
+
+/**
  * GET /api/convert?url=...&target=mihomo&...
  *
  * The workhorse endpoint: fetches, parses, transforms and renders in one
@@ -39,11 +48,15 @@ export async function respondWithConversion(
     const result = convert(subscription, request.target, request.options)
 
     const etag = `"${(await sha256Hex(result.content)).slice(0, 32)}"`
+    // Clash-family clients show the Content-Disposition filename as the
+    // profile name, so default to a clean "SubBridge" (no file extension)
+    // and let clients read a UTF-8 name via the RFC 5987 filename* field.
+    const profileName = request.filename ?? 'SubBridge'
     const headers = new Headers({
       'Content-Type': result.contentType,
       'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
       ETag: etag,
-      'Content-Disposition': `attachment; filename="${request.filename ?? result.filename}"`,
+      'Content-Disposition': contentDisposition(profileName),
       'Profile-Update-Interval': '24',
       'X-Content-Type-Options': 'nosniff',
     })

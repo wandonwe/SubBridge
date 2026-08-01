@@ -2,14 +2,17 @@ import type { ConvertOptions, ProxyNode } from '@subbridge/core'
 import {
   AUTO_GROUP,
   collectSets,
+  FALLBACK_GROUP,
   FINAL_GROUP,
   GROUP_ICONS,
   INTERNET_TEST_URL,
   MAIN_GROUP,
+  orderedSets,
   PROXY_TEST_URL,
-  RULES,
-  SELECTOR_GROUPS,
-  SET_ICON,
+  type RulePreset,
+  rulesForPreset,
+  STRATEGY_ICONS,
+  selectorGroupsForPreset,
   selectorOptions,
   surgeRuleUrl,
 } from './policy'
@@ -29,9 +32,12 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
   const names = lines.map((l) => l.split('=')[0]?.trim() ?? '')
   const testUrl = options.testUrl ?? PROXY_TEST_URL
   const useRules = options.rules !== 'none'
+  const preset: RulePreset =
+    options.rules === 'lite' || options.rules === 'full' ? options.rules : 'default'
   const useAuto = options.urlTest !== false
-  const sets = collectSets(supported)
-  const setNames = [...sets.keys()]
+  const sets = orderedSets(collectSets(supported), options.setStrategies)
+  const setNames = sets.map((s) => s.name)
+  const poolNames = setNames.length > 0 ? setNames : names
 
   const sections = [
     '#!MANAGED-CONFIG interval=86400 strict=false',
@@ -51,20 +57,16 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
     ...lines,
     '',
     '[Proxy Group]',
-    `${MAIN_GROUP} = select, ${useAuto ? `${AUTO_GROUP}, ` : ''}${(setNames.length > 0 ? setNames : names).join(', ')}, DIRECT, icon-url=${GROUP_ICONS[MAIN_GROUP]}`,
+    `${MAIN_GROUP} = select, ${useAuto ? `${AUTO_GROUP}, ${FALLBACK_GROUP}, ` : ''}${poolNames.join(', ')}, DIRECT, icon-url=${GROUP_ICONS[MAIN_GROUP]}`,
   ]
-  // Named node sets — each subscription stays selectable as its own group.
-  for (const [setName, members] of sets) {
-    sections.push(`${setName} = select, ${members.join(', ')}, icon-url=${SET_ICON}`)
-  }
   if (useRules) {
     const download = selectorOptions(
       { name: 'Download', options: ['DIRECT', MAIN_GROUP], defaultOption: 'DIRECT' },
       setNames,
     )
-    for (const g of SELECTOR_GROUPS) {
+    for (const g of selectorGroupsForPreset(preset)) {
       // Insert Download (macOS) between Claude and Media, as in the reference.
-      if (g.name === 'Media') {
+      if (g.name === 'Media' && preset !== 'lite') {
         sections.push(
           `Download = select, ${download.join(', ')}, icon-url=${GROUP_ICONS.Download} #!MACOS-ONLY`,
         )
@@ -74,17 +76,36 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
       )
     }
   }
+  // Node pools below the policy groups: AUTO, FALLBACK, then the named sets
+  // ordered auto → fallback → select.
   if (useAuto) {
     sections.push(
       `${AUTO_GROUP} = url-test, ${names.join(', ')}, url=${testUrl}, interval=300, icon-url=${GROUP_ICONS[AUTO_GROUP]}`,
+      `${FALLBACK_GROUP} = fallback, ${poolNames.join(', ')}, url=${testUrl}, interval=600, timeout=5, icon-url=${GROUP_ICONS[FALLBACK_GROUP]}`,
     )
+  }
+  for (const set of sets) {
+    const icon = `icon-url=${STRATEGY_ICONS[set.strategy]}`
+    if (set.strategy === 'auto') {
+      sections.push(
+        `${set.name} = url-test, ${set.members.join(', ')}, url=${testUrl}, interval=300, ${icon}`,
+      )
+    } else if (set.strategy === 'fallback') {
+      sections.push(
+        `${set.name} = fallback, ${set.members.join(', ')}, url=${testUrl}, interval=600, timeout=5, ${icon}`,
+      )
+    } else {
+      sections.push(`${set.name} = select, ${set.members.join(', ')}, ${icon}`)
+    }
   }
 
   sections.push('', '[Rule]')
   if (useRules) {
-    // Download processes → Download (reference order).
-    for (const proc of DOWNLOAD_PROCESSES) {
-      sections.push(`PROCESS-NAME,${proc},Download #!MACOS-ONLY`)
+    // Download processes → Download (reference order; not in lite).
+    if (preset !== 'lite') {
+      for (const proc of DOWNLOAD_PROCESSES) {
+        sections.push(`PROCESS-NAME,${proc},Download #!MACOS-ONLY`)
+      }
     }
     // Local domains & system services → direct.
     sections.push(
@@ -93,7 +114,7 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
       'RULE-SET,SYSTEM,DIRECT',
     )
     // Remote rule sets in reference evaluation order.
-    for (const entry of RULES) {
+    for (const entry of rulesForPreset(preset)) {
       if (!entry.surgePath) continue
       sections.push(
         `RULE-SET,${surgeRuleUrl(entry.surgePath)},${entry.policy},update-interval=86400`,

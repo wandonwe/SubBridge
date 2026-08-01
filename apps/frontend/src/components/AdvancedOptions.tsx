@@ -1,8 +1,8 @@
-import { Input, Switch, Textarea } from '@subbridge/ui'
+import { Input, Select, Switch, Textarea } from '@subbridge/ui'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
-import type { AdvancedOptions as Options } from '@/lib/convert'
+import { type AdvancedOptions as Options, RULE_PRESETS, type RulePresetOption } from '@/lib/convert'
 
 interface Props {
   value: Options
@@ -78,13 +78,30 @@ export function AdvancedOptions({ value, onChange }: Props) {
                   rows={3}
                 />
               </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-[--color-label-secondary]">
+                  Rule set
+                </span>
+                <Select
+                  value={value.rules}
+                  onChange={(e) => set('rules', e.target.value as RulePresetOption)}
+                >
+                  {RULE_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </Select>
+                <span className="mt-1.5 block text-[13px] text-[--color-label-tertiary]">
+                  {RULE_PRESETS.find((p) => p.value === value.rules)?.hint}
+                </span>
+              </label>
               <div className="flex flex-col gap-3.5 pt-1">
                 {(
                   [
                     ['dedupe', 'Deduplicate nodes'],
                     ['sort', 'Sort by name'],
                     ['urlTest', 'Auto url-test group'],
-                    ['rules', 'Remote routing rules'],
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key} className="flex items-center justify-between gap-3">

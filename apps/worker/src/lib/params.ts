@@ -1,5 +1,5 @@
-import type { ConvertOptions, OutputFormat } from '@subbridge/core'
-import { isOutputFormat } from '@subbridge/core'
+import type { ConvertOptions, OutputFormat, SetStrategy } from '@subbridge/core'
+import { isOutputFormat, isSetStrategy } from '@subbridge/core'
 import { isHttpUrl } from '@subbridge/utils'
 
 export interface ConvertRequest {
@@ -18,6 +18,7 @@ const RESERVED_GROUP_NAMES = new Set([
   'reject-drop',
   'proxy',
   'auto',
+  'fallback',
   'final',
   'guard',
   'media',
@@ -52,27 +53,48 @@ export function parseConvertParams(params: URLSearchParams): ConvertRequest {
   if (!isOutputFormat(target)) throw new BadRequestError(`unknown target "${target}"`)
 
   const options: ConvertOptions = {}
-  const groups = params
+  // `group` values: "Prime" (manual select), "Prime,auto" (url-test) or
+  // "Prime,fallback" (first healthy member).
+  const rawGroups = params
     .getAll('group')
     .map((g) => g.trim())
     .filter(Boolean)
-  if (groups.length > 0) {
-    if (groups.length > urls.length) {
+  if (rawGroups.length > 0) {
+    if (rawGroups.length > urls.length) {
       throw new BadRequestError('more `group` names than `url` values')
     }
-    for (const name of groups) {
+    const names: string[] = []
+    const strategies: Record<string, SetStrategy> = {}
+    for (const raw of rawGroups) {
+      const sep = raw.indexOf(',')
+      const name = (sep === -1 ? raw : raw.slice(0, sep)).trim()
+      const strategyRaw =
+        sep === -1
+          ? 'select'
+          : raw
+              .slice(sep + 1)
+              .trim()
+              .toLowerCase()
       if (!/^[\p{L}\p{N} _.-]{1,24}$/u.test(name)) {
         throw new BadRequestError(`invalid group name "${name}"`)
       }
       if (RESERVED_GROUP_NAMES.has(name.toLowerCase())) {
         throw new BadRequestError(`group name "${name}" is reserved`)
       }
+      if (!isSetStrategy(strategyRaw)) {
+        throw new BadRequestError(
+          `invalid strategy "${strategyRaw}" for group "${name}" (use auto, fallback or select)`,
+        )
+      }
+      names.push(name)
+      if (strategyRaw !== 'select') strategies[name] = strategyRaw
     }
-    if (new Set(groups.map((g) => g.toLowerCase())).size !== groups.length) {
+    if (new Set(names.map((g) => g.toLowerCase())).size !== names.length) {
       throw new BadRequestError('duplicate group names')
     }
     // Pad unnamed subscriptions so every URL lands in a set.
-    options.groups = urls.map((_, i) => groups[i] ?? `Set ${i + 1}`)
+    options.groups = urls.map((_, i) => names[i] ?? `Set ${i + 1}`)
+    if (Object.keys(strategies).length > 0) options.setStrategies = strategies
   }
   const include = params.get('include')
   if (include) options.include = include
@@ -86,7 +108,9 @@ export function parseConvertParams(params: URLSearchParams): ConvertRequest {
   if (flag(params, 'sort')) options.sort = true
   if (params.get('urltest') !== null) options.urlTest = flag(params, 'urltest')
   const rules = params.get('rules')
-  if (rules === 'none' || rules === 'default') options.rules = rules
+  if (rules === 'none' || rules === 'default' || rules === 'lite' || rules === 'full') {
+    options.rules = rules
+  }
   const ua = params.get('ua')
   if (ua) options.userAgent = ua
 
@@ -102,5 +126,13 @@ function flag(params: URLSearchParams, name: string): boolean {
 }
 
 function sanitizeFilename(name: string): string {
-  return name.replace(/[^\w.\- ]/g, '').slice(0, 64) || 'subbridge'
+  // Allow letters (incl. CJK), digits, spaces and a few safe punctuation
+  // marks; strip control chars, quotes, slashes and anything header-unsafe.
+  return (
+    name
+      .replace(/[\p{Cc}\p{Cf}"\\/\r\n]/gu, '')
+      .replace(/[^\p{L}\p{N} ._\-[\]()]/gu, '')
+      .trim()
+      .slice(0, 48) || 'SubBridge'
+  )
 }

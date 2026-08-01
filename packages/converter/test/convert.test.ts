@@ -82,9 +82,12 @@ describe('mihomo output', () => {
       'Guard',
       'Final',
       'AUTO',
+      'FALLBACK',
     ])
     expect(doc['proxy-groups'][0]).toMatchObject({ name: 'Proxy', type: 'select' })
-    expect(doc['proxy-groups'].at(-1)).toMatchObject({ name: 'AUTO', type: 'url-test' })
+    const auto = doc['proxy-groups'].find((g: { name: string }) => g.name === 'AUTO')
+    expect(auto).toMatchObject({ type: 'url-test', lazy: true })
+    expect(doc['proxy-groups'].at(-1)).toMatchObject({ name: 'FALLBACK', type: 'fallback' })
     expect(doc.rules.at(-1)).toBe('MATCH,Final')
     expect(doc.rules).toContain('RULE-SET,claude,Claude')
     expect(doc.rules).toContain('RULE-SET,ads,Guard')
@@ -98,6 +101,40 @@ describe('mihomo output', () => {
     const doc = parseYaml(convert(sub, 'mihomo', { urlTest: false, rules: 'none' }).content)
     expect(doc['proxy-groups']).toHaveLength(1)
     expect(doc.rules).toEqual(['MATCH,Proxy'])
+  })
+
+  it('full preset adds detail rules, Games group and Telegram IP ranges', () => {
+    const doc = parseYaml(convert(sub, 'mihomo', { rules: 'full' }).content)
+    const groupNames = doc['proxy-groups'].map((g: { name: string }) => g.name)
+    expect(groupNames).toContain('Games')
+    expect(doc.rules).toContain('RULE-SET,gemini,OpenAI')
+    expect(doc.rules).toContain('RULE-SET,disney,Media')
+    expect(doc.rules).toContain('RULE-SET,games,Games')
+    expect(doc.rules).toContain('RULE-SET,telegram-ip,Proxy,no-resolve')
+    // Telegram IP rule sits right after the telegram domain rule.
+    const idx = doc.rules.indexOf('RULE-SET,telegram,Proxy')
+    expect(doc.rules[idx + 1]).toBe('RULE-SET,telegram-ip,Proxy,no-resolve')
+    expect(doc['rule-providers']['telegram-ip'].behavior).toBe('ipcidr')
+  })
+
+  it('lite preset keeps only the essentials', () => {
+    const doc = parseYaml(convert(sub, 'mihomo', { rules: 'lite' }).content)
+    const groupNames = doc['proxy-groups'].map((g: { name: string }) => g.name)
+    expect(groupNames).toEqual(['Proxy', 'Guard', 'Final', 'AUTO', 'FALLBACK'])
+    const ruleSets = doc.rules.filter((r: string) => r.startsWith('RULE-SET,'))
+    expect(ruleSets).toEqual([
+      'RULE-SET,private,DIRECT',
+      'RULE-SET,ads,Guard',
+      'RULE-SET,cn,DIRECT',
+      'RULE-SET,global,Proxy',
+    ])
+    expect(doc.rules).not.toContain('RULE-SET,openai,OpenAI')
+  })
+
+  it('default preset excludes the full-tier extras', () => {
+    const doc = parseYaml(convert(sub, 'mihomo').content)
+    expect(doc.rules).not.toContain('RULE-SET,gemini,OpenAI')
+    expect(doc['proxy-groups'].map((g: { name: string }) => g.name)).not.toContain('Games')
   })
 })
 
@@ -171,12 +208,46 @@ describe('named node sets', () => {
     const byName = Object.fromEntries(doc['proxy-groups'].map((g: { name: string }) => [g.name, g]))
     expect(byName.Prime.proxies).toEqual(['HK 01', 'US Reality'])
     expect(byName.Backup.proxies).toEqual(['JP Hy2'])
-    expect(byName.Proxy.proxies).toEqual(['AUTO', 'Prime', 'Backup', 'DIRECT'])
+    expect(byName.Proxy.proxies).toEqual(['AUTO', 'FALLBACK', 'Prime', 'Backup', 'DIRECT'])
+    expect(byName.FALLBACK).toMatchObject({ type: 'fallback', proxies: ['Prime', 'Backup'] })
     // Screenshot defaults: first entry is the default selection.
     expect(byName.OpenAI.proxies[0]).toBe('Backup')
     expect(byName.Claude.proxies[0]).toBe('Proxy')
     expect(byName.Guard.proxies[0]).toBe('REJECT')
     expect(byName.Microsoft.proxies[0]).toBe('DIRECT')
+  })
+
+  it('applies per-set strategies with matching group types, order and icons', () => {
+    const doc = parseYaml(
+      convert(grouped, 'mihomo', { setStrategies: { Backup: 'auto', Prime: 'fallback' } }).content,
+    )
+    const byName = Object.fromEntries(doc['proxy-groups'].map((g: { name: string }) => [g.name, g]))
+    expect(byName.Backup).toMatchObject({ type: 'url-test', lazy: true })
+    expect(byName.Backup.icon).toContain('Auto.png')
+    expect(byName.Prime).toMatchObject({ type: 'fallback', lazy: true })
+    expect(byName.Prime.icon).toContain('Filter.png')
+    // Pools at the bottom, ordered auto → fallback → select.
+    const names = doc['proxy-groups'].map((g: { name: string }) => g.name)
+    expect(names.slice(-4)).toEqual(['AUTO', 'FALLBACK', 'Backup', 'Prime'])
+  })
+
+  it('sing-box renders strategy sets as urltest and includes clash_api', () => {
+    const config = JSON.parse(
+      convert(grouped, 'singbox', { setStrategies: { Prime: 'auto' } }).content,
+    )
+    const byTag = Object.fromEntries(config.outbounds.map((o: { tag: string }) => [o.tag, o]))
+    expect(byTag.Prime.type).toBe('urltest')
+    expect(byTag.Backup.type).toBe('selector')
+    expect(config.experimental.clash_api.external_controller).toBe('127.0.0.1:9090')
+  })
+
+  it('surge renders strategy sets with url-test / fallback lines', () => {
+    const { content } = convert(grouped, 'surge', {
+      setStrategies: { Prime: 'auto', Backup: 'fallback' },
+    })
+    expect(content).toMatch(/Prime = url-test, HK 01.*interval=300/)
+    expect(content).toMatch(/Backup = fallback, JP Hy2.*interval=600/)
+    expect(content).toContain('FALLBACK = fallback, Prime, Backup')
   })
 
   it('sing-box mirrors the sets with explicit defaults', () => {
@@ -192,14 +263,14 @@ describe('named node sets', () => {
     const { content } = convert(grouped, 'surge')
     expect(content).toContain('Prime = select, HK 01')
     expect(content).toContain('Backup = select, JP Hy2')
-    expect(content).toMatch(/Proxy = select, AUTO, Prime, Backup, DIRECT/)
+    expect(content).toMatch(/Proxy = select, AUTO, FALLBACK, Prime, Backup, DIRECT/)
     expect(content).toContain('OpenAI = select, Backup, DIRECT, Proxy, Prime')
   })
 
   it('pools nodes as before when no sets are named', () => {
     const doc = parseYaml(convert(sub, 'mihomo').content)
     const proxy = doc['proxy-groups'].find((g: { name: string }) => g.name === 'Proxy')
-    expect(proxy.proxies).toEqual(['AUTO', 'HK 01', 'US Reality', 'JP Hy2', 'DIRECT'])
+    expect(proxy.proxies).toEqual(['AUTO', 'FALLBACK', 'HK 01', 'US Reality', 'JP Hy2', 'DIRECT'])
     const openai = doc['proxy-groups'].find((g: { name: string }) => g.name === 'OpenAI')
     // Without a Backup set, OpenAI falls back to Proxy as default.
     expect(openai.proxies[0]).toBe('Proxy')

@@ -4,9 +4,11 @@ import {
   collectSets,
   FINAL_GROUP,
   MAIN_GROUP,
+  orderedSets,
   PROXY_TEST_URL,
-  RULES,
-  SELECTOR_GROUPS,
+  type RulePreset,
+  rulesForPreset,
+  selectorGroupsForPreset,
   selectorOptions,
 } from './policy'
 
@@ -25,26 +27,23 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
   const outbounds = nodes.map(toSingboxOutbound)
   const names = nodes.map((n) => n.name)
   const useRules = options.rules !== 'none'
-  const sets = collectSets(nodes)
-  const setNames = [...sets.keys()]
+  const preset: RulePreset =
+    options.rules === 'lite' || options.rules === 'full' ? options.rules : 'default'
+  const useAuto = options.urlTest !== false
+  const testUrl = options.testUrl ?? PROXY_TEST_URL
+  const sets = orderedSets(collectSets(nodes), options.setStrategies)
+  const setNames = sets.map((s) => s.name)
+  const poolNames = setNames.length > 0 ? setNames : names
 
   const selector: Dict = {
     type: 'selector',
     tag: MAIN_GROUP,
-    outbounds: [
-      ...(options.urlTest !== false ? [AUTO_GROUP] : []),
-      ...(setNames.length > 0 ? setNames : names),
-      'direct',
-    ],
-    default: options.urlTest !== false ? AUTO_GROUP : (setNames[0] ?? names[0]),
+    outbounds: [...(useAuto ? [AUTO_GROUP] : []), ...poolNames, 'direct'],
+    default: useAuto ? AUTO_GROUP : poolNames[0],
   }
   const groupOutbounds: Dict[] = [selector]
-  // Named node sets — each subscription stays selectable as its own group.
-  for (const [setName, members] of sets) {
-    groupOutbounds.push({ type: 'selector', tag: setName, outbounds: members })
-  }
   if (useRules) {
-    for (const g of SELECTOR_GROUPS) {
+    for (const g of selectorGroupsForPreset(preset)) {
       if (g.name === 'Guard') continue // handled via the `reject` route action
       const opts = selectorOptions(g, setNames).map((o) => (o === 'DIRECT' ? 'direct' : o))
       groupOutbounds.push({
@@ -55,15 +54,31 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
       })
     }
   }
-  if (options.urlTest !== false) {
+  // Node pools below the policy groups. sing-box has no fallback group type,
+  // so `fallback` sets render as urltest — closest native equivalent.
+  if (useAuto) {
     groupOutbounds.push({
       type: 'urltest',
       tag: AUTO_GROUP,
       outbounds: names,
-      url: options.testUrl ?? PROXY_TEST_URL,
+      url: testUrl,
       interval: '5m',
       tolerance: 50,
     })
+  }
+  for (const set of sets) {
+    if (set.strategy === 'auto' || set.strategy === 'fallback') {
+      groupOutbounds.push({
+        type: 'urltest',
+        tag: set.name,
+        outbounds: set.members,
+        url: testUrl,
+        interval: '5m',
+        tolerance: set.strategy === 'fallback' ? 300 : 50,
+      })
+    } else {
+      groupOutbounds.push({ type: 'selector', tag: set.name, outbounds: set.members })
+    }
   }
 
   const routeRules: Dict[] = [
@@ -75,7 +90,7 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
   if (useRules) {
     ruleSets.push(geositeRuleSet('private'))
     routeRules.push({ rule_set: 'geosite-private', outbound: 'direct' })
-    for (const entry of RULES) {
+    for (const entry of rulesForPreset(preset)) {
       if (!entry.geosite) continue // Surge-only list without a geosite twin
       ruleSets.push(geositeRuleSet(entry.geosite))
       const tag = `geosite-${entry.geosite}`
@@ -85,6 +100,11 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
         routeRules.push({ rule_set: tag, outbound: 'direct' })
       } else {
         routeRules.push({ rule_set: tag, outbound: entry.policy })
+      }
+      // Telegram's hard-coded IP ranges, right after its domain rule.
+      if (entry.key === 'telegram' && preset === 'full') {
+        ruleSets.push(geoipRuleSet('telegram'))
+        routeRules.push({ rule_set: 'geoip-telegram', outbound: MAIN_GROUP })
       }
     }
     ruleSets.push(geoipRuleSet('cn'))
@@ -119,6 +139,15 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
     },
     experimental: {
       cache_file: { enabled: true },
+      // Clash-compatible control API: switch groups and view latency from
+      // web dashboards like metacubexd (auto-downloaded on first run).
+      clash_api: {
+        external_controller: '127.0.0.1:9090',
+        external_ui: 'ui',
+        external_ui_download_url:
+          'https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip',
+        external_ui_download_detour: 'direct',
+      },
     },
   }
 

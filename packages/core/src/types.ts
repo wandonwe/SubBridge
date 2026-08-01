@@ -114,6 +114,15 @@ export interface Subscription {
   title?: string
 }
 
+/** Scheduling strategy of a named node set. */
+export type SetStrategy = 'select' | 'auto' | 'fallback'
+
+export const SET_STRATEGIES: readonly SetStrategy[] = ['select', 'auto', 'fallback'] as const
+
+export function isSetStrategy(value: string): value is SetStrategy {
+  return (SET_STRATEGIES as readonly string[]).includes(value)
+}
+
 export type OutputFormat =
   | 'mihomo'
   | 'singbox'
@@ -136,6 +145,11 @@ export interface ConvertOptions {
    * (e.g. `['Prime', 'Backup']`) instead of being pooled together.
    */
   groups?: string[]
+  /**
+   * Scheduling strategy per set name: `select` (manual, default), `auto`
+   * (url-test picks the fastest member) or `fallback` (first healthy member).
+   */
+  setStrategies?: Record<string, SetStrategy>
   /** Prefix prepended to every node name. */
   prefix?: string
   /** Deduplicate nodes that resolve to the same endpoint. */
@@ -146,8 +160,15 @@ export interface ConvertOptions {
   urlTest?: boolean
   /** URL used by health-check groups. */
   testUrl?: string
-  /** Remote rule provider preset: `default` ships a sane rule set, `none` emits MATCH only. */
-  rules?: 'default' | 'none'
+  /**
+   * Rule-set preset:
+   *  - `default` — the Matrix policy (balanced, recommended)
+   *  - `full`    — default plus detailed extras (Gemini, Disney+, Prime
+   *                Video, games, Telegram IP ranges)
+   *  - `lite`    — minimal fast set (ads / cn / global only)
+   *  - `none`    — MATCH only
+   */
+  rules?: 'lite' | 'default' | 'full' | 'none'
   /** User-Agent to send upstream when fetching subscriptions. */
   userAgent?: string
 }

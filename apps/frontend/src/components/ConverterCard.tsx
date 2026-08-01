@@ -1,22 +1,21 @@
 import type { OutputFormat } from '@subbridge/core'
-import { Button, GlassCard, Select, Textarea } from '@subbridge/ui'
+import { Button, GlassCard, Input, Select, Textarea } from '@subbridge/ui'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Check, Copy, ExternalLink, Link2, QrCode } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { apiOrigin } from '@/lib/api'
 import { buildConvertUrl, DEFAULT_ADVANCED, parseUrlInput } from '@/lib/convert'
 import { CLIENT_SCHEMES, FORMATS } from '@/lib/formats'
-import { addHistory, type HistoryEntry } from '@/lib/history'
 import { AdvancedOptions } from './AdvancedOptions'
 
 interface Props {
-  onGenerated: (history: HistoryEntry[]) => void
   onShowQr: (url: string) => void
 }
 
-export function ConverterCard({ onGenerated, onShowQr }: Props) {
+export function ConverterCard({ onShowQr }: Props) {
   const [input, setInput] = useState('')
   const [target, setTarget] = useState<OutputFormat>('mihomo')
+  const [profileName, setProfileName] = useState('SubBridge')
   const [advanced, setAdvanced] = useState(DEFAULT_ADVANCED)
   const [result, setResult] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -31,18 +30,9 @@ export function ConverterCard({ onGenerated, onShowQr }: Props) {
       return
     }
     setError(null)
-    const convertUrl = buildConvertUrl(apiOrigin(), urls, target, advanced)
+    const convertUrl = buildConvertUrl(apiOrigin(), urls, target, advanced, profileName)
     setResult(convertUrl)
     setCopied(false)
-    onGenerated(
-      addHistory({
-        id: crypto.randomUUID(),
-        convertUrl,
-        target,
-        sourceCount: urls.length,
-        createdAt: Date.now(),
-      }),
-    )
   }
 
   const copy = async (text: string) => {
@@ -68,8 +58,8 @@ export function ConverterCard({ onGenerated, onShowQr }: Props) {
           <Textarea
             placeholder={
               'https://example.com/your-subscription\n' +
-              'Merge more by adding lines — name them to keep separate sets:\n' +
-              'Prime https://example.com/sub-a\nBackup https://example.com/sub-b'
+              'Merge more by adding lines — name sets, optionally with a strategy:\n' +
+              'Prime,auto https://example.com/sub-a\nBackup,fallback https://example.com/sub-b'
             }
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -104,6 +94,23 @@ export function ConverterCard({ onGenerated, onShowQr }: Props) {
               {formatMeta.hint}
             </span>
           )}
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-[13px] font-semibold uppercase tracking-wide text-[--color-label-secondary]">
+            Profile name
+          </span>
+          <Input
+            placeholder="SubBridge"
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            maxLength={48}
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+          <span className="mt-1.5 block text-[13px] text-[--color-label-tertiary]">
+            Shown as the config name in your client
+          </span>
         </label>
 
         <AdvancedOptions value={advanced} onChange={setAdvanced} />

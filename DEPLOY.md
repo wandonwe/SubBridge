@@ -1,5 +1,7 @@
 # Deploy your own SubBridge
 
+**English** · [简体中文](DEPLOY.zh-CN.md) — how to *use* the converter: [USAGE.md](USAGE.md)
+
 SubBridge runs entirely on Cloudflare's free tier. Fork this repo and you have
 your own private instance in a few minutes — no VPS, no server, no code changes.
 
