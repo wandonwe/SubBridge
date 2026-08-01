@@ -2,45 +2,56 @@
 
 # 🌉 SubBridge
 
-**Bridge Every Subscription.**
+**Bridge Every Subscription. —— 最方便的自建节点转换工具**
 
-A modern, lightweight and secure subscription conversion platform for
-Mihomo (Clash Verge), Sing-box, Hiddify, Shadowrocket, Surge and Quantumult X —
-running entirely on Cloudflare Pages + Workers. No VPS required.
+一个现代、轻量、安全的订阅转换平台,支持 Mihomo (Clash Verge)、Sing-box、
+Hiddify、Shadowrocket、Surge、Quantumult X ——
+完全运行在 Cloudflare Pages + Workers 上,**无需 VPS,免费自建**。
 
-**English** · [简体中文](README.zh-CN.md)
+**简体中文** · [English](README.en.md)
 
-**Docs:** [Deploy Guide](DEPLOY.md) ([中文](DEPLOY.zh-CN.md)) · [Usage Guide](USAGE.md) ([中文](USAGE.zh-CN.md))
+**文档:**[部署指南](DEPLOY.zh-CN.md) · [使用说明](USAGE.zh-CN.md)
 
 </div>
 
 ---
 
-## Why SubBridge
+## 为什么选 SubBridge
 
-Traditional subscription converters are heavy, hard to deploy and leak your
-subscription URLs to third-party services. SubBridge is different:
+传统订阅转换器要么部署繁琐,要么把你的订阅链接交给第三方服务。SubBridge 不一样:
 
-- **Beautiful** — an Apple-style interface with frosted glass, fluid motion and native dark mode
-- **Fast** — parsing and rendering happen at Cloudflare's edge, with layered caching and ETags
-- **Private** — original subscription URLs are AES-256-GCM encrypted inside short links and never logged
-- **Yours** — MIT-licensed, one-command deployment onto your own Cloudflare account
-- **Mobile first** — designed for phones, with QR codes and one-tap client imports
+- **最方便的自建**——Fork 仓库、填 3 个 Secret、推送,几分钟拥有自己的实例;之后每次 `git push` 自动部署,零运维
+- **零成本**——跑在 Cloudflare 免费套餐上,不需要服务器,全球 300+ 边缘节点加速
+- **隐私优先**——转换在你自己的 Worker 上完成,不记录、不存储;网页无历史记录;短链 AES-256-GCM 加密,原始订阅永不暴露
+- **好看好用**——苹果风格界面,毛玻璃质感,原生深色模式,移动端优先,扫码即导入
+- **能打**——多订阅合并、命名节点集(自动测速 / 故障转移 / 手动)、统一分流策略、四档规则集预设、正则过滤重命名
 
-## Supported formats
+## 支持的格式
 
-| Input | Output |
+| 输入 | 输出 |
 | --- | --- |
-| Hiddify / Clash / Mihomo YAML | Mihomo (Clash Verge) YAML profile |
-| Base64 subscriptions | Sing-box JSON config |
-| Share links (`ss` `vmess` `vless` `trojan` `hysteria2` `tuic`) | Shadowrocket / Base64 |
-| Multiple subscriptions merged | Surge 5 · Quantumult X · Share links |
+| Hiddify / Clash / Mihomo YAML | Mihomo (Clash Verge) 完整配置(策略组 + 规则) |
+| Base64 订阅 | Sing-box JSON 配置(规则集 + Clash API 面板) |
+| 分享链接(`ss` `vmess` `vless` `trojan` `hysteria2` `tuic`) | Shadowrocket / Base64 |
+| 多条订阅合并 | Surge 5 · Quantumult X · 分享链接列表 |
 
-Plus: node rename & regex filters, deduplication, merge, url-test groups,
-remote rule sets, custom User-Agent, subscription caching and encrypted
-short links.
+另有:节点重命名与正则过滤、去重、合并、命名节点集(`Prime,auto` 语法)、
+AUTO 测速池、FALLBACK 故障转移池、统一分流策略(OpenAI / Claude / Media /
+Guard 等专用策略组)、规则集预设(Lite / Default / Full)、自定义配置名、
+订阅缓存、加密短链。
 
-## Architecture
+## 三分钟自建
+
+1. **Fork 本仓库**
+2. 在 Cloudflare 创建 API 令牌(权限:Workers Scripts / Workers KV Storage /
+   Cloudflare Pages,均为 Edit),复制账户 ID
+3. 在你的 fork 里添加两个 Secret:`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`
+4. 推送任意提交,或在 Actions 页手动运行 **Deploy**
+
+部署流程会自动创建存储、部署 API 和网站并把它们连好。完整步骤(含自定义域名、
+加密短链、访问控制)见 [部署指南](DEPLOY.zh-CN.md)。
+
+## 架构
 
 ```
 subbridge/
@@ -48,136 +59,47 @@ subbridge/
 │   ├── frontend/    React 19 · Vite · Tailwind CSS 4 · Framer Motion  → Cloudflare Pages
 │   └── worker/      Hono · TypeScript                                 → Cloudflare Workers
 └── packages/
-    ├── core/        Canonical node model & shared types
-    ├── parser/      Subscriptions & share links → canonical nodes
-    ├── converter/   Canonical nodes → client formats
-    ├── ui/          Apple-style glass UI primitives
-    └── utils/       Runtime-agnostic helpers (base64, crypto, url)
+    ├── core/        统一节点模型与共享类型
+    ├── parser/      订阅与分享链接 → 统一节点模型
+    ├── converter/   统一节点模型 → 各客户端格式
+    ├── ui/          苹果风格 UI 组件
+    └── utils/       通用工具(base64、加密、URL)
 ```
 
-Every input format is parsed into one canonical node model, and every output
-format is rendered from it — adding a client is a single new renderer.
+所有输入格式都先解析为统一节点模型,再渲染为目标格式——新增一个客户端只需
+写一个渲染器。
 
 ## API
 
-| Endpoint | Description |
+| 端点 | 说明 |
 | --- | --- |
-| `GET /api/convert?url=…&target=mihomo` | Convert one or more subscriptions |
-| `GET /api/share/:id` | Resolve an encrypted short link |
-| `POST /api/short` | Create an encrypted short link |
-| `GET /api/qrcode?text=…` | Render an SVG QR code |
-| `GET /api/version` | Build & format information |
+| `GET /api/convert?url=…&target=mihomo` | 转换一条或多条订阅 |
+| `GET /api/share/:id` | 解析加密短链 |
+| `POST /api/short` | 创建加密短链 |
+| `GET /api/qrcode?text=…` | 生成 SVG 二维码 |
+| `GET /api/version` | 版本与支持格式 |
 
-### `GET /api/convert` parameters
+完整参数表(节点集、策略、规则预设、过滤重命名等)见 [使用说明](USAGE.zh-CN.md)。
 
-| Param | Description |
-| --- | --- |
-| `url` | Subscription URL — repeatable (or `\|`-separated) to merge |
-| `group` | Named node set per `url` (repeatable, e.g. `group=Prime&group=Backup`) — keeps each subscription's nodes in its own selectable group |
-| `target` | `mihomo` `singbox` `shadowrocket` `surge` `quantumultx` `base64` `sharelink` |
-| `include` / `exclude` | Regex filters on node names |
-| `rename` | `search->replace` rule, repeatable, regex supported |
-| `prefix` | Prefix added to every node name |
-| `dedupe` / `sort` | `1` to enable |
-| `urltest` | `0` to skip the auto url-test group |
-| `rules` | `none` for a rule-free config (MATCH only) |
-| `ua` | Custom User-Agent sent to the upstream |
-| `token` | API token, if the instance sets one |
+## 安全设计
 
-Responses include `ETag`, `Cache-Control`, `Subscription-Userinfo`
-pass-through and honour `If-None-Match` with `304`.
+- 前端不接触订阅内容——转换全部发生在 Worker
+- 短链负载用只有你的 Worker 持有的密钥做 AES-256-GCM 加密
+- 可选 `API_TOKEN` 访问令牌保护转换端点(恒定时间比较)
+- 内置每 IP 限流与 CORS 来源白名单
+- 网页零历史记录,刷新即无痕
 
-### `POST /api/short`
-
-```jsonc
-// body: any /api/convert parameters, plus optional ttlDays
-{ "url": "https://example.com/sub", "target": "singbox", "ttlDays": 90 }
-// → { "id": "aB3xK9mP2q", "url": "https://your.app/api/share/aB3xK9mP2q" }
-```
-
-The stored payload is sealed with AES-256-GCM using your `SECRET` — a KV dump
-reveals nothing about the original subscription.
-
-## Deploy your own
-
-SubBridge is built to be forked. **Fork the repo, add three Cloudflare secrets,
-push** — a GitHub Action provisions storage, deploys the API and the site to
-your own Cloudflare account, and wires them together. No VPS, no code changes.
-
-👉 **Full walkthrough: [DEPLOY.md](DEPLOY.md)**
-
-Quick version:
-
-1. Fork this repository.
-2. Create a Cloudflare API token (permissions: Workers Scripts:Edit, Workers KV
-   Storage:Edit, Cloudflare Pages:Edit) and grab your Account ID.
-3. In your fork → Settings → Secrets and variables → Actions, add
-   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and (optional)
-   `SUBBRIDGE_SECRET` for encrypted short links.
-4. Push, or run the **Deploy** workflow from the Actions tab.
-
-Your instance comes up at `subbridge.pages.dev` with the API on your own
-`workers.dev` subdomain. Bring your own domain anytime — see DEPLOY.md.
-
-## Deployment (details)
-
-### 1. Worker (API)
-
-```bash
-cd apps/worker
-wrangler kv namespace create SUBBRIDGE_KV     # put the id into wrangler.toml
-wrangler secret put SECRET                    # enables encrypted short links
-# optional hardening:
-# wrangler secret put API_TOKEN
-pnpm deploy
-```
-
-### 2. Frontend (Pages)
-
-```bash
-pnpm --filter @subbridge/frontend build
-# Deploy apps/frontend/dist with Cloudflare Pages.
-# Point /api/* at your worker: edit apps/frontend/public/_redirects,
-# or attach a route / custom domain so Pages and the Worker share an origin.
-```
-
-Configuration lives in `apps/worker/wrangler.toml`: `CORS_ORIGINS`,
-`RATE_LIMIT_PER_MINUTE`, `UPSTREAM_CACHE_TTL`.
-
-### 3. Auto-deploy from GitHub
-
-`.github/workflows/deploy.yml` deploys both apps on every push to `main`.
-One-time setup:
-
-1. Create a Cloudflare API token (dashboard → My Profile → API Tokens) with
-   **Workers Scripts: Edit** and **Cloudflare Pages: Edit** permissions.
-2. In the GitHub repo, add two Actions secrets:
-   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-3. Make sure the KV namespace id is filled in `apps/worker/wrangler.toml`
-   and secrets were set once via `wrangler secret put SECRET` — they live in
-   Cloudflare, not in the repo.
-
-After that, `git push` is the whole deployment story.
-
-## Development
+## 本地开发
 
 ```bash
 pnpm install
-pnpm dev            # frontend on :5173 (proxies /api → :8787) + worker on :8787
+pnpm dev            # 前端 :5173(/api 代理到 :8787)+ Worker :8787
 pnpm test           # vitest
-pnpm typecheck      # strict TS across the workspace
+pnpm typecheck      # 全仓库严格 TS
 pnpm lint           # biome
-pnpm build          # all apps
+pnpm build          # 构建全部应用
 ```
 
-## Security model
+## 开源协议
 
-- The frontend never sees subscription contents — conversion happens on the worker
-- Short-link payloads are AES-256-GCM encrypted with a key only your worker holds
-- Optional `API_TOKEN` gates conversion endpoints (constant-time comparison)
-- Per-IP rate limiting and a CORS origin whitelist are built in
-- `X-Content-Type-Options: nosniff` and size limits on everything user-supplied
-
-## License
-
-[MIT](LICENSE) — build something great on it.
+[MIT](LICENSE) —— 欢迎 Fork、自建、二次开发。
