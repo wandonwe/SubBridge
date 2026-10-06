@@ -173,6 +173,11 @@ export interface ConvertOptions {
   rules?: 'lite' | 'default' | 'full' | 'none'
   /** User-Agent to send upstream when fetching subscriptions. */
   userAgent?: string
+  /**
+   * Public URL of this converted profile. Surge writes it into
+   * `#!MANAGED-CONFIG` so the profile can update itself.
+   */
+  profileUrl?: string
 }
 
 export const OUTPUT_FORMATS: readonly OutputFormat[] = [

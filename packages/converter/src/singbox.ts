@@ -1,4 +1,5 @@
 import type { ConvertOptions, ProxyNode } from '@subbridge/core'
+import { normalizeSsPlugin } from './plugin'
 import {
   AUTO_GROUP,
   collectSets,
@@ -15,7 +16,7 @@ import {
 type Dict = Record<string, any>
 
 /**
- * Render a complete sing-box (1.10+) JSON configuration following the
+ * Render a complete sing-box (1.12+) JSON configuration following the
  * unified Matrix policy (see `policy.ts`). Rule sources are MetaCubeX srs
  * rule sets — the sing-box equivalents of the reference blackmatrix7 lists.
  *
@@ -108,17 +109,22 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
       }
     }
     ruleSets.push(geoipRuleSet('cn'))
-    routeRules.push({ rule_set: 'geoip-cn', outbound: 'direct' })
+    // Resolve whatever no domain rule claimed so China IPs still go direct
+    // (mirrors mihomo's GEOIP/ipcidr behaviour).
+    routeRules.push({ action: 'resolve' }, { rule_set: 'geoip-cn', outbound: 'direct' })
   }
 
   const config: Dict = {
     log: { level: 'info', timestamp: true },
     dns: {
+      // DoH servers are addressed by hostname, so they need a plain-IP
+      // bootstrap resolver (mandatory once more than one server exists).
       servers: [
-        { tag: 'remote', type: 'https', server: 'dns.alidns.com' },
-        { tag: 'local', type: 'https', server: 'doh.pub' },
+        { tag: 'alidns', type: 'https', server: 'dns.alidns.com', domain_resolver: 'bootstrap' },
+        { tag: 'dnspod', type: 'https', server: 'doh.pub', domain_resolver: 'bootstrap' },
+        { tag: 'bootstrap', type: 'udp', server: '223.5.5.5' },
       ],
-      final: 'remote',
+      final: 'alidns',
     },
     inbounds: [
       {
@@ -134,6 +140,8 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
     route: {
       final: useRules ? FINAL_GROUP : MAIN_GROUP,
       auto_detect_interface: true,
+      // Required from sing-box 1.14 for outbounds whose server is a hostname.
+      default_domain_resolver: 'bootstrap',
       rules: routeRules,
       ...(ruleSets.length > 0 ? { rule_set: ruleSets } : {}),
     },
@@ -192,8 +200,24 @@ export function toSingboxOutbound(node: ProxyNode): Dict {
         method: node.method,
         password: node.password,
       }
-      if (node.plugin) {
-        o.plugin = node.plugin === 'obfs-local' ? 'obfs-local' : node.plugin
+      // sing-box speaks SIP003 option strings for obfs-local / v2ray-plugin.
+      const plugin = normalizeSsPlugin(node)
+      if (plugin?.kind === 'obfs') {
+        o.plugin = 'obfs-local'
+        o.plugin_opts = [
+          `obfs=${plugin.mode}`,
+          ...(plugin.host ? [`obfs-host=${plugin.host}`] : []),
+        ].join(';')
+      } else if (plugin?.kind === 'v2ray') {
+        o.plugin = 'v2ray-plugin'
+        o.plugin_opts = [
+          'mode=websocket',
+          ...(plugin.tls ? ['tls'] : []),
+          ...(plugin.host ? [`host=${plugin.host}`] : []),
+          ...(plugin.path ? [`path=${plugin.path}`] : []),
+        ].join(';')
+      } else if (plugin && node.plugin) {
+        o.plugin = node.plugin
         if (node.pluginOpts) o.plugin_opts = node.pluginOpts
       }
       return o
@@ -258,7 +282,9 @@ function applyTls(o: Dict, node: ProxyNode, implied = false): void {
   if (tls.serverName) t.server_name = tls.serverName
   if (tls.alpn?.length) t.alpn = tls.alpn
   if (tls.insecure) t.insecure = true
-  if (tls.fingerprint) t.utls = { enabled: true, fingerprint: tls.fingerprint }
+  // REALITY refuses to start without uTLS; default to chrome when unspecified.
+  const fingerprint = tls.fingerprint || (tls.reality ? 'chrome' : undefined)
+  if (fingerprint) t.utls = { enabled: true, fingerprint }
   if (tls.reality) {
     t.reality = {
       enabled: true,

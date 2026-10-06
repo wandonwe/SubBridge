@@ -94,5 +94,6 @@ shareRoute.get('/:id', async (c) => {
     if (err instanceof BadRequestError) return c.json({ error: err.message }, 400)
     throw err
   }
+  request.options.profileUrl = c.req.url
   return respondWithConversion(c.env, request, c.req.header('If-None-Match'))
 })

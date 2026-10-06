@@ -1,4 +1,5 @@
 import type { ConvertOptions, ProxyNode } from '@subbridge/core'
+import { normalizeSsPlugin, safeLineName } from './plugin'
 import {
   AUTO_GROUP,
   collectSets,
@@ -23,13 +24,18 @@ const DOWNLOAD_PROCESSES = ['aria2c', 'Downie', 'Folx', 'Gopeed', 'Thunder', 'Tr
 /**
  * Render a Surge 5 profile following the unified Matrix policy (see
  * `policy.ts`) — groups, rule sets and order mirror the reference
- * `Config/Matrix.surgeconfig`. Surge has no vless support — those nodes are
- * skipped (Surge rejects whole profiles containing unknown types).
+ * `Config/Matrix.surgeconfig`. Nodes Surge can't carry (VLESS, REALITY,
+ * gRPC/H2 transports, …) are skipped — see `surgeLine`.
  */
 export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): string {
-  const supported = nodes.filter((n) => n.protocol !== 'vless')
-  const lines = supported.map(surgeLine).filter((l): l is string => l !== null)
-  const names = lines.map((l) => l.split('=')[0]?.trim() ?? '')
+  // Keep only nodes Surge can render, with names safe inside a CSV line.
+  const rendered = nodes
+    .map((n) => ({ ...n, name: safeLineName(n.name) }))
+    .map((n) => ({ node: n, line: surgeLine(n) }))
+    .filter((r): r is { node: ProxyNode; line: string } => r.line !== null)
+  const supported = rendered.map((r) => r.node)
+  const lines = rendered.map((r) => r.line)
+  const names = supported.map((n) => n.name)
   const testUrl = options.testUrl ?? PROXY_TEST_URL
   const useRules = options.rules !== 'none'
   const preset: RulePreset =
@@ -41,7 +47,10 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
   const poolNames = setNames.length > 0 ? setNames : names
 
   const sections = [
-    '#!MANAGED-CONFIG interval=86400 strict=false',
+    // Surge needs the profile's own URL here to auto-update it.
+    ...(options.profileUrl
+      ? [`#!MANAGED-CONFIG ${options.profileUrl} interval=86400 strict=false`]
+      : []),
     '',
     '[General]',
     'loglevel = notify',
@@ -132,68 +141,68 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
   return sections.join('\n')
 }
 
+/**
+ * Render one node as a Surge `[Proxy]` line, or null when Surge cannot carry
+ * it faithfully (VLESS/REALITY, gRPC/H2/HTTPUpgrade transports, v2ray-plugin).
+ * Emitting such a node as plain TCP would only produce a dead entry.
+ */
 function surgeLine(node: ProxyNode): string | null {
-  const parts: string[] = []
+  const t = node.transport?.type ?? 'tcp'
+  if (t !== 'tcp' && t !== 'ws') return null
+  if (node.tls?.reality) return null
+
+  const parts: string[] = [`${node.name} = ${surgeType(node)}`, node.server, String(node.port)]
+  const pushWs = () => {
+    if (t !== 'ws') return
+    parts.push('ws=true')
+    if (node.transport?.path) parts.push(`ws-path=${node.transport.path}`)
+    if (node.transport?.host) parts.push(`ws-headers=Host:${node.transport.host}`)
+  }
+
   switch (node.protocol) {
     case 'ss': {
-      parts.push(
-        `${node.name} = ss`,
-        `${node.server}`,
-        `${node.port}`,
-        `encrypt-method=${node.method}`,
-        `password=${node.password}`,
-      )
-      if (node.plugin === 'obfs-local' || node.plugin === 'obfs') {
-        const opts = Object.fromEntries(
-          (node.pluginOpts ?? '').split(';').map((kv) => kv.split('=') as [string, string]),
-        )
-        if (opts.obfs) parts.push(`obfs=${opts.obfs}`)
-        if (opts['obfs-host']) parts.push(`obfs-host=${opts['obfs-host']}`)
+      if (t !== 'tcp') return null
+      parts.push(`encrypt-method=${node.method}`, `password=${node.password}`)
+      const plugin = normalizeSsPlugin(node)
+      if (plugin?.kind === 'obfs') {
+        parts.push(`obfs=${plugin.mode}`)
+        if (plugin.host) parts.push(`obfs-host=${plugin.host}`)
+      } else if (plugin) {
+        return null // v2ray-plugin & friends: not supported by Surge
       }
       break
     }
     case 'vmess': {
-      parts.push(`${node.name} = vmess`, `${node.server}`, `${node.port}`, `username=${node.uuid}`)
-      if (node.transport?.type === 'ws') {
-        parts.push('ws=true')
-        if (node.transport.path) parts.push(`ws-path=${node.transport.path}`)
-        if (node.transport.host) parts.push(`ws-headers=Host:"${node.transport.host}"`)
+      parts.push(`username=${node.uuid}`)
+      // Surge defaults to the legacy handshake; alterId 0 servers need AEAD.
+      if (!node.alterId) parts.push('vmess-aead=true')
+      if (node.security === 'chacha20-poly1305' || node.security === 'chacha20-ietf-poly1305') {
+        parts.push('encrypt-method=chacha20-ietf-poly1305')
       }
+      pushWs()
       if (node.tls?.enabled) parts.push('tls=true')
       break
     }
     case 'trojan': {
-      parts.push(
-        `${node.name} = trojan`,
-        `${node.server}`,
-        `${node.port}`,
-        `password=${node.password}`,
-      )
-      if (node.transport?.type === 'ws') {
-        parts.push('ws=true')
-        if (node.transport.path) parts.push(`ws-path=${node.transport.path}`)
-      }
+      parts.push(`password=${node.password}`)
+      pushWs()
       break
     }
     case 'hysteria2': {
-      parts.push(
-        `${node.name} = hysteria2`,
-        `${node.server}`,
-        `${node.port}`,
-        `password=${node.password}`,
-      )
+      if (t !== 'tcp') return null
+      parts.push(`password=${node.password}`)
+      if (node.obfs === 'salamander' && node.obfsPassword) {
+        parts.push(`salamander-password=${node.obfsPassword}`)
+      } else if (node.obfs) {
+        return null
+      }
       if (node.downMbps) parts.push(`download-bandwidth=${node.downMbps}`)
       break
     }
     case 'tuic': {
-      parts.push(
-        `${node.name} = tuic-v5`,
-        `${node.server}`,
-        `${node.port}`,
-        `uuid=${node.uuid}`,
-        `password=${node.password}`,
-      )
-      if (node.tls?.alpn?.length) parts.push(`alpn=${node.tls.alpn.join(',')}`)
+      if (t !== 'tcp') return null
+      parts.push(`uuid=${node.uuid}`, `password=${node.password}`)
+      parts.push(`alpn=${node.tls?.alpn?.length ? node.tls.alpn.join(',') : 'h3'}`)
       break
     }
     default:
@@ -214,4 +223,13 @@ function surgeLine(node: ProxyNode): string | null {
 
   const [head, ...rest] = parts
   return `${head}, ${rest.join(', ')}`
+}
+
+function surgeType(node: ProxyNode): string {
+  switch (node.protocol) {
+    case 'tuic':
+      return 'tuic-v5'
+    default:
+      return node.protocol
+  }
 }

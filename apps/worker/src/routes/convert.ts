@@ -30,6 +30,7 @@ convertRoute.get('/', async (c) => {
     if (err instanceof BadRequestError) return c.json({ error: err.message }, 400)
     throw err
   }
+  request.options.profileUrl = c.req.url
   return respondWithConversion(c.env, request, c.req.header('If-None-Match'))
 })
 
@@ -54,7 +55,8 @@ export async function respondWithConversion(
     const profileName = request.filename ?? 'SubBridge'
     const headers = new Headers({
       'Content-Type': result.contentType,
-      'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+      // `private`: the body embeds credentials — never let shared caches keep it.
+      'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
       ETag: etag,
       'Content-Disposition': contentDisposition(profileName),
       'Profile-Update-Interval': '24',

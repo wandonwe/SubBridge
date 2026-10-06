@@ -24,7 +24,7 @@ app.route('/api/version', versionRoute)
 app.get('/', (c) =>
   c.json({
     name: 'SubBridge API',
-    docs: 'https://github.com/subbridge/subbridge#api',
+    docs: 'https://github.com/wandonwe/SubBridge#api',
     endpoints: ['/api/convert', '/api/share/:id', '/api/qrcode', '/api/short', '/api/version'],
   }),
 )

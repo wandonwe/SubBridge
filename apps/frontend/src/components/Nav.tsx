@@ -31,7 +31,7 @@ export function Nav() {
             variant="ghost"
             size="icon"
             aria-label="GitHub repository"
-            onClick={() => window.open('https://github.com/subbridge/subbridge', '_blank')}
+            onClick={() => window.open('https://github.com/wandonwe/SubBridge', '_blank')}
           >
             <Github className="h-[18px] w-[18px]" />
           </Button>

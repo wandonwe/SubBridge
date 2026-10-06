@@ -15,7 +15,8 @@ export function toShareLink(node: ProxyNode): string {
     case 'hysteria2':
       return uriLink('hysteria2', node.password, node, hysteria2Query(node))
     case 'tuic':
-      return uriLink('tuic', `${node.uuid}:${node.password}`, node, tuicQuery(node))
+      // uuid and password are encoded separately: the ':' must stay literal.
+      return uriLink('tuic', node.uuid, node, tuicQuery(node), node.password)
   }
 }
 
@@ -38,9 +39,14 @@ function uriLink(
   userinfo: string,
   node: ProxyNode,
   query: URLSearchParams,
+  password?: string,
 ): string {
   const qs = query.toString()
-  return `${scheme}://${encodeURIComponent(userinfo)}@${host(node)}:${node.port}${
+  const auth =
+    password === undefined
+      ? encodeURIComponent(userinfo)
+      : `${encodeURIComponent(userinfo)}:${encodeURIComponent(password)}`
+  return `${scheme}://${auth}@${host(node)}:${node.port}${
     qs ? `?${qs}` : ''
   }#${encodeURIComponent(node.name)}`
 }
@@ -65,7 +71,7 @@ function vmessLink(node: Extract<ProxyNode, { protocol: 'vmess' }>): string {
     port: String(node.port),
     id: node.uuid,
     aid: String(node.alterId),
-    scy: node.security,
+    scy: node.security || 'auto',
     net: node.transport?.type ?? 'tcp',
     type: 'none',
     host: node.transport?.host ?? '',
@@ -134,6 +140,7 @@ function tuicQuery(node: Extract<ProxyNode, { protocol: 'tuic' }>): URLSearchPar
   const query = new URLSearchParams()
   if (node.tls?.serverName) query.set('sni', node.tls.serverName)
   if (node.tls?.alpn?.length) query.set('alpn', node.tls.alpn.join(','))
+  if (node.tls?.insecure) query.set('allow_insecure', '1')
   if (node.congestionControl) query.set('congestion_control', node.congestionControl)
   if (node.udpRelayMode) query.set('udp_relay_mode', node.udpRelayMode)
   return query

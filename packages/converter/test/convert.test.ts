@@ -97,6 +97,35 @@ describe('mihomo output', () => {
     expect(vless['reality-opts']).toEqual({ 'public-key': 'PBK', 'short-id': 'ab' })
   })
 
+  it('renders httpupgrade as ws + v2ray-http-upgrade and http obfs as http-opts', () => {
+    const base = { protocol: 'vless', server: 'x.example.com', port: 443, uuid: 'u' } as const
+    const doc = parseYaml(
+      convert(
+        {
+          nodes: [
+            {
+              ...base,
+              name: 'HU',
+              transport: { type: 'httpupgrade', path: '/up', host: 'h.example.com' },
+            },
+            { ...base, name: 'HT', transport: { type: 'http', path: '/p', host: 'h.example.com' } },
+          ] as ProxyNode[],
+        },
+        'mihomo',
+      ).content,
+    )
+    const [hu, ht] = doc.proxies
+    expect(hu.network).toBe('ws')
+    expect(hu['ws-opts']).toEqual({
+      path: '/up',
+      headers: { Host: 'h.example.com' },
+      'v2ray-http-upgrade': true,
+    })
+    expect(hu['httpupgrade-opts']).toBeUndefined()
+    expect(ht.network).toBe('http')
+    expect(ht['http-opts']).toEqual({ path: ['/p'], headers: { Host: ['h.example.com'] } })
+  })
+
   it('omits policy groups and rules when disabled', () => {
     const doc = parseYaml(
       convert(sub, 'mihomo', { urlTest: false, fallback: false, rules: 'none' }).content,
@@ -141,6 +170,7 @@ describe('mihomo output', () => {
       'RULE-SET,ads,Guard',
       'RULE-SET,cn,DIRECT',
       'RULE-SET,global,Proxy',
+      'RULE-SET,cn-ip,DIRECT',
     ])
     expect(doc.rules).not.toContain('RULE-SET,openai,OpenAI')
   })
@@ -306,5 +336,132 @@ describe('share link round-trip', () => {
     const { content } = convert(sub, 'base64')
     const decoded = Buffer.from(content, 'base64').toString('utf8')
     expect(decoded.split('\n').filter(Boolean)).toHaveLength(3)
+  })
+})
+
+describe('client compatibility fixes', () => {
+  const ssObfsLink: ProxyNode = {
+    protocol: 'ss',
+    name: 'SS obfs, link',
+    server: 'a.example.com',
+    port: 80,
+    method: 'aes-128-gcm',
+    password: 'pw',
+    plugin: 'obfs-local',
+    pluginOpts: 'obfs=http;obfs-host=bing.com',
+  }
+  const ssObfsClash: ProxyNode = {
+    ...ssObfsLink,
+    name: 'SS obfs clash',
+    plugin: 'obfs',
+    pluginOpts: 'mode=tls;host=bing.com',
+  }
+  const vmess0: ProxyNode = {
+    protocol: 'vmess',
+    name: 'VM',
+    server: 'v.example.com',
+    port: 443,
+    uuid: 'u',
+    alterId: 0,
+    security: 'auto',
+    tls: { enabled: true, serverName: 'v.example.com' },
+    transport: { type: 'ws', path: '/ws', host: 'v.example.com' },
+  }
+  const vmessGrpc: ProxyNode = {
+    ...vmess0,
+    name: 'VM grpc',
+    transport: { type: 'grpc', serviceName: 'g' },
+  }
+  const realityNoFp: ProxyNode = {
+    protocol: 'vless',
+    name: 'R',
+    server: 'r.example.com',
+    port: 443,
+    uuid: 'u',
+    flow: 'xtls-rprx-vision',
+    tls: {
+      enabled: true,
+      serverName: 'www.apple.com',
+      reality: { publicKey: 'PBK', shortId: 'ab' },
+    },
+  }
+  const hy2: ProxyNode = {
+    protocol: 'hysteria2',
+    name: 'H',
+    server: 'h.example.com',
+    port: 443,
+    password: 'p',
+    obfs: 'salamander',
+    obfsPassword: 'op',
+  }
+
+  it('mihomo normalises both ss obfs dialects and defaults REALITY fingerprint', () => {
+    const doc = parseYaml(
+      convert({ nodes: [ssObfsLink, ssObfsClash, realityNoFp] }, 'mihomo').content,
+    )
+    expect(doc.proxies[0]).toMatchObject({
+      plugin: 'obfs',
+      'plugin-opts': { mode: 'http', host: 'bing.com' },
+    })
+    expect(doc.proxies[1]).toMatchObject({
+      plugin: 'obfs',
+      'plugin-opts': { mode: 'tls', host: 'bing.com' },
+    })
+    expect(doc.proxies[2]['client-fingerprint']).toBe('chrome')
+    expect(doc.dns['default-nameserver']).toBeDefined()
+    expect(doc.rules).not.toContain('GEOIP,CN,DIRECT')
+  })
+
+  it('sing-box uses SIP003 plugin opts, uTLS for REALITY and a bootstrap resolver', () => {
+    const doc = JSON.parse(convert({ nodes: [ssObfsClash, realityNoFp] }, 'singbox').content)
+    const ss = doc.outbounds.find((o: { tag: string }) => o.tag === 'SS obfs clash')
+    expect(ss).toMatchObject({ plugin: 'obfs-local', plugin_opts: 'obfs=tls;obfs-host=bing.com' })
+    const r = doc.outbounds.find((o: { tag: string }) => o.tag === 'R')
+    expect(r.tls.utls).toEqual({ enabled: true, fingerprint: 'chrome' })
+    expect(doc.route.default_domain_resolver).toBe('bootstrap')
+    expect(doc.dns.servers.find((s: { tag: string }) => s.tag === 'bootstrap')).toBeDefined()
+  })
+
+  it('surge: AEAD vmess, salamander, skips unsupported nodes, sanitises names', () => {
+    const { content } = convert(
+      { nodes: [ssObfsLink, vmess0, vmessGrpc, realityNoFp, hy2] },
+      'surge',
+      { profileUrl: 'https://api.example.com/api/convert?x=1' },
+    )
+    expect(content.startsWith('#!MANAGED-CONFIG https://api.example.com/api/convert?x=1 ')).toBe(
+      true,
+    )
+    expect(content).toContain('SS obfs link = ss, a.example.com, 80')
+    expect(content).toContain('obfs=http, obfs-host=bing.com')
+    expect(content).toMatch(/VM = vmess, .*vmess-aead=true.*ws-headers=Host:v\.example\.com/)
+    expect(content).toContain('salamander-password=op')
+    expect(content).not.toContain('VM grpc')
+    expect(content).not.toMatch(/^R = /m)
+  })
+
+  it('quantumult x: REALITY params, obfs from clash dialect, skips gRPC', () => {
+    const content = convert(
+      { nodes: [ssObfsClash, vmess0, vmessGrpc, realityNoFp, hy2] },
+      'quantumultx',
+    ).content
+    const lines = content.split('\n')
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toContain('obfs=tls, obfs-host=bing.com')
+    expect(lines[1]).not.toContain('aead=false')
+    expect(lines[2]).toContain('obfs=over-tls, obfs-host=www.apple.com')
+    expect(lines[2]).toContain('reality-base64-pubkey=PBK, reality-hex-shortid=ab')
+    expect(lines[2]).toContain('vless-flow=xtls-rprx-vision')
+  })
+
+  it('tuic share link keeps the uuid:password separator literal', () => {
+    const link = toShareLink({
+      protocol: 'tuic',
+      name: 'T',
+      server: 't.example.com',
+      port: 443,
+      uuid: 'uu-id',
+      password: 'p@ss',
+    })
+    expect(link.startsWith('tuic://uu-id:p%40ss@t.example.com:443')).toBe(true)
   })
 })

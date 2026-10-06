@@ -1,5 +1,6 @@
 import type { ConvertOptions, ProxyNode } from '@subbridge/core'
 import { stringify as stringifyYaml } from 'yaml'
+import { normalizeSsPlugin } from './plugin'
 import {
   AUTO_GROUP,
   collectSets,
@@ -115,6 +116,22 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
       'prefer-h3': true,
       'enhanced-mode': 'fake-ip',
       'fake-ip-range': '198.18.0.1/16',
+      // Domains that must see real IPs (LAN, NTP, captive portals, consoles).
+      'fake-ip-filter': [
+        '*.lan',
+        '+.local',
+        '+.home.arpa',
+        'localhost.ptlogin2.qq.com',
+        '+.msftconnecttest.com',
+        '+.msftncsi.com',
+        'time.*.com',
+        '+.pool.ntp.org',
+        '+.stun.*.*',
+        '+.srv.nintendo.net',
+        '+.xboxlive.com',
+      ],
+      // Plain-IP bootstrap so the DoH hostnames below can be resolved.
+      'default-nameserver': ['223.5.5.5', '119.29.29.29'],
       nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query'],
     },
     proxies: nodes.map(toMihomoProxy),
@@ -140,7 +157,10 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
         rules.push(`RULE-SET,${TELEGRAM_IP_KEY},${MAIN_GROUP},no-resolve`)
       }
     }
-    rules.push('GEOIP,LAN,DIRECT', 'GEOIP,CN,DIRECT', `MATCH,${FINAL_GROUP}`)
+    // China IPs via an mrs rule set rather than GEOIP,CN, so first launch
+    // doesn't depend on downloading a GeoIP database from GitHub.
+    providers['cn-ip'] = geoipProvider('cn')
+    rules.push('GEOIP,LAN,DIRECT,no-resolve', 'RULE-SET,cn-ip,DIRECT', `MATCH,${FINAL_GROUP}`)
     config['rule-providers'] = providers
     config.rules = rules
   } else {
@@ -184,7 +204,20 @@ export function toMihomoProxy(node: ProxyNode): Dict {
   switch (node.protocol) {
     case 'ss': {
       const p: Dict = { ...base, type: 'ss', cipher: node.method, password: node.password }
-      if (node.plugin) {
+      const plugin = normalizeSsPlugin(node)
+      if (plugin?.kind === 'obfs') {
+        p.plugin = 'obfs'
+        p['plugin-opts'] = { mode: plugin.mode, ...(plugin.host ? { host: plugin.host } : {}) }
+      } else if (plugin?.kind === 'v2ray') {
+        p.plugin = 'v2ray-plugin'
+        p['plugin-opts'] = {
+          mode: 'websocket',
+          ...(plugin.tls ? { tls: true } : {}),
+          ...(plugin.host ? { host: plugin.host } : {}),
+          ...(plugin.path ? { path: plugin.path } : {}),
+        }
+      } else if (plugin && node.plugin) {
+        // Pass anything else (shadow-tls, restls, …) through untouched.
         p.plugin = node.plugin
         if (node.pluginOpts) p['plugin-opts'] = parsePluginOpts(node.pluginOpts)
       }
@@ -244,7 +277,9 @@ function applyTls(p: Dict, node: ProxyNode, implied = false): void {
   }
   if (tls.alpn?.length) p.alpn = tls.alpn
   if (tls.insecure) p['skip-cert-verify'] = true
-  if (tls.fingerprint) p['client-fingerprint'] = tls.fingerprint
+  // REALITY needs a uTLS client hello; default to chrome when unspecified.
+  const fingerprint = tls.fingerprint || (tls.reality ? 'chrome' : undefined)
+  if (fingerprint) p['client-fingerprint'] = fingerprint
   if (tls.reality) {
     p['reality-opts'] = {
       'public-key': tls.reality.publicKey,
@@ -256,19 +291,30 @@ function applyTls(p: Dict, node: ProxyNode, implied = false): void {
 function applyTransport(p: Dict, node: ProxyNode): void {
   const t = node.transport
   if (!t || t.type === 'tcp') return
-  p.network = t.type === 'h2' ? 'h2' : t.type
   if (t.type === 'ws' || t.type === 'httpupgrade') {
+    // mihomo has no `httpupgrade` network: it is ws + v2ray-http-upgrade.
+    p.network = 'ws'
     const opts: Dict = {}
     if (t.path) opts.path = t.path
     if (t.host) opts.headers = { Host: t.host }
-    p[`${t.type}-opts`] = opts
+    if (t.type === 'httpupgrade') opts['v2ray-http-upgrade'] = true
+    p['ws-opts'] = opts
   } else if (t.type === 'grpc') {
+    p.network = 'grpc'
     p['grpc-opts'] = { 'grpc-service-name': t.serviceName ?? t.path ?? '' }
-  } else if (t.type === 'h2' || t.type === 'http') {
+  } else if (t.type === 'h2') {
+    p.network = 'h2'
     const opts: Dict = {}
     if (t.path) opts.path = t.path
     if (t.host) opts.host = [t.host]
     p['h2-opts'] = opts
+  } else if (t.type === 'http') {
+    // HTTP/1.1 obfs uses http-opts with list-valued path and headers.
+    p.network = 'http'
+    const opts: Dict = {}
+    if (t.path) opts.path = [t.path]
+    if (t.host) opts.headers = { Host: [t.host] }
+    p['http-opts'] = opts
   }
 }
 
