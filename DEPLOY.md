@@ -115,8 +115,11 @@ zone in your Cloudflare account.)
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CORS_ORIGINS` | `*` | comma-separated allowed origins; tighten to your site for safety |
-| `RATE_LIMIT_PER_MINUTE` | `60` | per-IP request cap on `/api/*` (0 disables) |
-| `UPSTREAM_CACHE_TTL` | `300` | seconds to cache fetched subscriptions |
+| `UPSTREAM_CACHE_TTL` | `300` | seconds to edge-cache fetched subscriptions (Cache API; inactive on `*.workers.dev`) |
+
+The per-IP rate limit (60 requests/minute on `/api/*`) is the `[[ratelimits]]` block in
+`wrangler.toml` — edit `limit` there, or delete the block to disable it. It uses
+Cloudflare's native rate limiter, so it consumes no KV quota.
 
 Secrets (`wrangler secret put …`, or GitHub secrets above):
 

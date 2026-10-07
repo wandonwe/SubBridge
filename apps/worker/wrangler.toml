@@ -6,7 +6,7 @@ compatibility_date = "2026-07-01"
 # (set as a GitHub Actions secret), so forks deploy to their own account
 # without editing this file.
 
-# Required: KV namespace for caching, short links and rate limiting.
+# Required: KV namespace for encrypted short links.
 # Create with:  wrangler kv namespace create SUBBRIDGE_KV
 [[kv_namespaces]]
 binding = "SUBBRIDGE_KV"
@@ -18,9 +18,9 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 # Actions secret named CORS_ORIGINS (e.g. https://sub.example.com); the
 # deploy workflow will apply it automatically.
 CORS_ORIGINS = "*"
-# Requests per minute per client IP for /api/* (0 disables rate limiting).
-RATE_LIMIT_PER_MINUTE = "60"
-# Upstream subscription cache TTL in seconds.
+# Upstream subscription cache TTL in seconds (edge Cache API, not KV).
+# Note: the Cache API is a no-op on *.workers.dev — bind a custom domain
+# to get caching; without one every conversion refetches upstream.
 UPSTREAM_CACHE_TTL = "300"
 
 # Secrets (set with `wrangler secret put <NAME>`):
@@ -28,5 +28,19 @@ UPSTREAM_CACHE_TTL = "300"
 #   API_TOKEN  — optional bearer token; when set, /api/convert and /api/short
 #                require it via `Authorization: Bearer` or `?token=`
 
+# Per-IP rate limit for /api/*, enforced by Cloudflare's native Rate
+# Limiting binding (in-memory counters — uses no KV quota). Approximate and
+# per data center by design. Remove this block to disable rate limiting.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }
+
+# Keep error logs, but don't persist per-request invocation logs: request
+# URLs carry subscription links (with user UUIDs) in `?url=`.
 [observability]
 enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false

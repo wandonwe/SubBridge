@@ -1,7 +1,8 @@
 export interface Env {
   SUBBRIDGE_KV: KVNamespace
   CORS_ORIGINS: string
-  RATE_LIMIT_PER_MINUTE: string
+  /** Native Rate Limiting binding; absent when the [[ratelimits]] block is removed. */
+  RATE_LIMITER?: RateLimit
   UPSTREAM_CACHE_TTL: string
   /** Secret: AES-GCM key material for encrypted short links. */
   SECRET?: string

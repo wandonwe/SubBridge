@@ -109,8 +109,10 @@ npx wrangler pages deploy apps/frontend/dist --project-name subbridge
 | 变量 | 默认值 | 含义 |
 | --- | --- | --- |
 | `CORS_ORIGINS` | `*` | 逗号分隔的来源白名单;建议收紧到你的站点 |
-| `RATE_LIMIT_PER_MINUTE` | `60` | `/api/*` 每 IP 每分钟请求上限(0 关闭) |
-| `UPSTREAM_CACHE_TTL` | `300` | 上游订阅缓存秒数 |
+| `UPSTREAM_CACHE_TTL` | `300` | 上游订阅边缘缓存秒数(Cache API;在 `*.workers.dev` 上不生效) |
+
+每 IP 限流(`/api/*` 每分钟 60 次)在 `wrangler.toml` 的 `[[ratelimits]]` 段里配置:改 `limit`
+调整次数,删掉整段即关闭。它使用 Cloudflare 原生限流,不消耗 KV 额度。
 
 Secret(`wrangler secret put …` 或上文的 GitHub Secret):
 

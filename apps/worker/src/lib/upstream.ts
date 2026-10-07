@@ -20,16 +20,24 @@ interface FetchedSub {
   userInfo: string | null
 }
 
+/** Synthetic origin for Cache API keys — never fetched, only used as a key. */
+const CACHE_ORIGIN = 'https://upstream-cache.subbridge.internal'
+
 /**
- * Fetch one upstream subscription with a KV-backed edge cache, so bursts of
- * conversions never hammer the origin panel.
+ * Fetch one upstream subscription behind a short edge cache (Cache API), so
+ * bursts of conversions never hammer the origin panel. The Cache API costs
+ * no KV quota and keeps subscription bodies out of persistent storage; it is
+ * per data center, and a no-op on *.workers.dev (every call then refetches).
  */
 async function fetchOne(env: Env, url: string, userAgent?: string): Promise<FetchedSub> {
   const ttl = Math.max(60, Number(env.UPSTREAM_CACHE_TTL) || 300)
-  const cacheKey = `up:${await sha256Hex(`${url}\u0000${userAgent ?? ''}`)}`
+  const cacheKey = new Request(
+    `${CACHE_ORIGIN}/${await sha256Hex(`${url}\u0000${userAgent ?? ''}`)}`,
+  )
+  const cache = caches.default
 
-  const cached = await env.SUBBRIDGE_KV.get<FetchedSub>(cacheKey, 'json')
-  if (cached) return cached
+  const hit = await cache.match(cacheKey).catch(() => undefined)
+  if (hit) return (await hit.json()) as FetchedSub
 
   let res: Response
   try {
@@ -55,7 +63,15 @@ async function fetchOne(env: Env, url: string, userAgent?: string): Promise<Fetc
     body,
     userInfo: res.headers.get('subscription-userinfo'),
   }
-  await env.SUBBRIDGE_KV.put(cacheKey, JSON.stringify(fetched), { expirationTtl: ttl })
+  // Best effort: a failed cache write must never fail the conversion.
+  await cache
+    .put(
+      cacheKey,
+      new Response(JSON.stringify(fetched), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${ttl}` },
+      }),
+    )
+    .catch(() => undefined)
   return fetched
 }
 

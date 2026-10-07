@@ -142,7 +142,7 @@ pnpm --filter @subbridge/frontend build
 ```
 
 Configuration lives in `apps/worker/wrangler.toml`: `CORS_ORIGINS`,
-`RATE_LIMIT_PER_MINUTE`, `UPSTREAM_CACHE_TTL`.
+`UPSTREAM_CACHE_TTL`, and the `[[ratelimits]]` block (per-IP rate limit).
 
 ### 3. Auto-deploy from GitHub
 

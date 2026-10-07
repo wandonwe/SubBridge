@@ -28,26 +28,23 @@ export function corsWhitelist(): MiddlewareHandler<AppContext> {
 }
 
 /**
- * Fixed-window per-IP rate limit backed by KV. Coarse by design: KV is
- * eventually consistent, which is fine for abuse protection at the edge.
+ * Per-IP rate limit via Cloudflare's native Rate Limiting binding. Counters
+ * live in memory on the edge (no KV reads/writes, so no KV quota is spent);
+ * they are approximate and per data center, which is fine for abuse
+ * protection. Removing the [[ratelimits]] block in wrangler.toml disables it.
  */
 export function rateLimit(): MiddlewareHandler<AppContext> {
   return async (c, next) => {
-    const limit = Number(c.env.RATE_LIMIT_PER_MINUTE) || 0
-    if (limit <= 0) return next()
+    const limiter = c.env.RATE_LIMITER
+    if (!limiter) return next()
 
     const ip = c.req.header('CF-Connecting-IP') ?? 'unknown'
-    const windowStart = Math.floor(Date.now() / 60_000)
-    const key = `rl:${ip}:${windowStart}`
-    const count = Number((await c.env.SUBBRIDGE_KV.get(key)) ?? 0)
-
-    if (count >= limit) {
+    const { success } = await limiter.limit({ key: ip })
+    if (!success) {
       return c.json({ error: 'rate limit exceeded, try again in a minute' }, 429, {
         'Retry-After': '60',
       })
     }
-    // Fire-and-forget: don't block the request on the counter write.
-    c.executionCtx.waitUntil(c.env.SUBBRIDGE_KV.put(key, String(count + 1), { expirationTtl: 120 }))
     return next()
   }
 }
