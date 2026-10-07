@@ -129,6 +129,9 @@ export type OutputFormat =
   | 'shadowrocket'
   | 'surge'
   | 'quantumultx'
+  | 'quantumultx-conf'
+  | 'loon'
+  | 'loon-conf'
   | 'base64'
   | 'sharelink'
 
@@ -178,6 +181,13 @@ export interface ConvertOptions {
    * `#!MANAGED-CONFIG` so the profile can update itself.
    */
   profileUrl?: string
+  /**
+   * Node subscriptions that full Loon / Quantumult X profiles reference
+   * (`[Remote Proxy]` / `[server_remote]`) instead of inlining nodes, so the
+   * nodes refresh on their own. One entry per node set (tag = set name), or a
+   * single `SubBridge` entry when there are no sets. Filled in by the worker.
+   */
+  resources?: { tag: string; url: string }[]
 }
 
 export const OUTPUT_FORMATS: readonly OutputFormat[] = [
@@ -186,6 +196,9 @@ export const OUTPUT_FORMATS: readonly OutputFormat[] = [
   'shadowrocket',
   'surge',
   'quantumultx',
+  'quantumultx-conf',
+  'loon',
+  'loon-conf',
   'base64',
   'sharelink',
 ] as const

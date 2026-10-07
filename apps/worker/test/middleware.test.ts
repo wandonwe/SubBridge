@@ -37,3 +37,30 @@ describe('rateLimit', () => {
     expect(seen).toEqual(['203.0.113.7', '203.0.113.7'])
   })
 })
+
+describe('part + resources', async () => {
+  const { attachResources, parseConvertParams } = await import('../src/lib/params')
+  it('narrows to one subscription and builds per-set node feeds', () => {
+    const qs = new URLSearchParams()
+    qs.append('url', 'https://a.example/sub')
+    qs.append('url', 'https://b.example/sub')
+    qs.append('group', 'Primary,auto')
+    qs.append('group', 'Secondary,fallback')
+    qs.set('target', 'loon-conf')
+    const req = parseConvertParams(qs)
+    attachResources(req, `https://api.example/api/convert?${qs}`)
+    expect(req.options.resources?.map((r) => r.tag)).toEqual(['Primary', 'Secondary'])
+    const second = new URL(req.options.resources?.[1]?.url ?? '')
+    expect(second.searchParams.get('target')).toBe('loon')
+    expect(second.searchParams.get('part')).toBe('1')
+
+    const narrowed = parseConvertParams(second.searchParams)
+    expect(narrowed.urls).toEqual(['https://b.example/sub'])
+    expect(narrowed.options.groups).toEqual(['Secondary'])
+  })
+  it('rejects an out-of-range part', () => {
+    expect(() => parseConvertParams(new URLSearchParams('url=https://a.example/x&part=3'))).toThrow(
+      /part/,
+    )
+  })
+})

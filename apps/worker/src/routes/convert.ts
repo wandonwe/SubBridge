@@ -2,7 +2,12 @@ import { convert } from '@subbridge/converter'
 import { sha256Hex } from '@subbridge/utils'
 import { Hono } from 'hono'
 import type { AppContext } from '../env'
-import { BadRequestError, type ConvertRequest, parseConvertParams } from '../lib/params'
+import {
+  attachResources,
+  BadRequestError,
+  type ConvertRequest,
+  parseConvertParams,
+} from '../lib/params'
 import { loadSubscriptions, UpstreamError } from '../lib/upstream'
 
 export const convertRoute = new Hono<AppContext>()
@@ -31,6 +36,7 @@ convertRoute.get('/', async (c) => {
     throw err
   }
   request.options.profileUrl = c.req.url
+  attachResources(request, c.req.url)
   return respondWithConversion(c.env, request, c.req.header('If-None-Match'))
 })
 

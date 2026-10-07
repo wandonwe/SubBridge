@@ -465,3 +465,103 @@ describe('client compatibility fixes', () => {
     expect(link.startsWith('tuic://uu-id:p%40ss@t.example.com:443')).toBe(true)
   })
 })
+
+describe('loon', () => {
+  const reality: ProxyNode = {
+    protocol: 'vless',
+    name: 'TYO, Reality',
+    server: '1.2.3.4',
+    port: 443,
+    uuid: 'uu',
+    flow: 'xtls-rprx-vision',
+    udp: true,
+    tls: {
+      enabled: true,
+      serverName: 'www.apple.com',
+      reality: { publicKey: 'PBK', shortId: 'ab' },
+    },
+  }
+  const hy2: ProxyNode = {
+    protocol: 'hysteria2',
+    name: 'LA hy2',
+    server: 'la.example.com',
+    port: 8443,
+    password: 'p',
+    obfs: 'salamander',
+    obfsPassword: 'op',
+    tls: { enabled: true, serverName: 'la.example.com' },
+  }
+  const tuic: ProxyNode = {
+    protocol: 'tuic',
+    name: 'T',
+    server: 't.example.com',
+    port: 443,
+    uuid: 'u',
+    password: 'p',
+  }
+
+  it('renders node lines in Loon syntax and skips what Loon cannot carry', () => {
+    const lines = convert({ nodes: [reality, hy2, tuic] }, 'loon').content.split('\n')
+    expect(lines).toEqual([
+      'TYO Reality = VLESS,1.2.3.4,443,"uu",transport=tcp,flow=xtls-rprx-vision,over-tls=true,sni=www.apple.com,public-key="PBK",short-id=ab,tls-profile=chrome,udp=true',
+      'LA hy2 = Hysteria2,la.example.com,8443,"p",sni=la.example.com,salamander-password=op,udp=true',
+    ])
+  })
+
+  it('full profile references per-set resources and keeps names distinct', () => {
+    const nodes = [
+      { ...reality, group: 'Primary' },
+      { ...hy2, group: 'Secondary' },
+    ]
+    const { content } = convert({ nodes }, 'loon-conf', {
+      setStrategies: { Primary: 'auto', Secondary: 'fallback' },
+      resources: [
+        { tag: 'Primary', url: 'https://api.example/a?target=loon&part=0' },
+        { tag: 'Secondary', url: 'https://api.example/a?target=loon&part=1' },
+      ],
+    })
+    expect(content).toContain('Primary-Sub = https://api.example/a?target=loon&part=0,')
+    expect(content).toMatch(/^Proxy = select,AUTO,FALLBACK,Primary,Secondary,DIRECT,img-url=/m)
+    expect(content).toMatch(/^Primary = url-test,Primary-Sub,/m)
+    expect(content).toMatch(/^Secondary = fallback,Secondary-Sub,/m)
+    expect(content).toMatch(/^Guard = select,REJECT,DIRECT,img-url=/m)
+    expect(content).not.toContain('REJECT-DROP')
+    expect(content).toContain('rule/Loon/OpenAI/OpenAI.list, policy=OpenAI, tag=openai')
+    expect(content).toContain('doh-server = https://doh.pub/dns-query')
+    expect(content).not.toContain('[Proxy]\n')
+  })
+
+  it('full profile inlines nodes when no resources are given', () => {
+    const { content } = convert({ nodes: [reality] }, 'loon-conf')
+    expect(content).toContain('[Proxy]\nTYO Reality = VLESS,')
+    expect(content).toMatch(/^AUTO = url-test,TYO Reality,/m)
+  })
+})
+
+describe('quantumult x full config', () => {
+  const node: ProxyNode = {
+    protocol: 'trojan',
+    name: 'JP 1',
+    server: 'jp.example.com',
+    port: 443,
+    password: 'p',
+    tls: { enabled: true, serverName: 'jp.example.com' },
+  }
+  it('uses Global as the main group and resource filters per set', () => {
+    const { content } = convert({ nodes: [{ ...node, group: 'Primary' }] }, 'quantumultx-conf', {
+      setStrategies: { Primary: 'auto' },
+      resources: [{ tag: 'Primary', url: 'https://api.example/a?target=quantumultx&part=0' }],
+    })
+    expect(content).toMatch(/^static=Global, AUTO, FALLBACK, Primary, direct, img-url=/m)
+    expect(content).toMatch(/^url-latency-benchmark=Primary, resource-tag-regex=\^\(Primary\)\$/m)
+    expect(content).toContain(
+      'https://api.example/a?target=quantumultx&part=0, tag=Primary, update-interval=86400, opt-parser=false, enabled=true',
+    )
+    expect(content).toContain(
+      'rule/QuantumultX/GitHub/GitHub.list, tag=github, force-policy=Global',
+    )
+    expect(content).toMatch(/^static=Guard, reject, direct, img-url=/m)
+    expect(content).toContain('final, Final')
+    expect(content).not.toMatch(/lobehub/)
+  })
+})

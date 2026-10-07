@@ -36,9 +36,11 @@ const RESERVED_GROUP_NAMES = new Set([
  *   include / exclude   node-name regex filters
  *   rename   repeatable `search->replace` rules
  *   prefix, dedupe, sort, urltest, rules, ua, filename
+ *   part     0-based index: convert only that one subscription (used by the
+ *            per-set node resources that full Loon / QX profiles reference)
  */
 export function parseConvertParams(params: URLSearchParams): ConvertRequest {
-  const urls = params
+  let urls = params
     .getAll('url')
     .flatMap((u) => u.split('|'))
     .map((u) => u.trim())
@@ -96,6 +98,15 @@ export function parseConvertParams(params: URLSearchParams): ConvertRequest {
     options.groups = urls.map((_, i) => names[i] ?? `Set ${i + 1}`)
     if (Object.keys(strategies).length > 0) options.setStrategies = strategies
   }
+  const part = params.get('part')
+  if (part !== null) {
+    const i = Number(part)
+    if (!Number.isInteger(i) || i < 0 || i >= urls.length) {
+      throw new BadRequestError(`invalid \`part\` index "${part}"`)
+    }
+    urls = [urls[i] as string]
+    if (options.groups) options.groups = [options.groups[i] as string]
+  }
   const include = params.get('include')
   if (include) options.include = include
   const exclude = params.get('exclude')
@@ -136,4 +147,36 @@ function sanitizeFilename(name: string): string {
       .trim()
       .slice(0, 48) || 'SubBridge'
   )
+}
+
+/** Full-profile targets and the node-only target their resources point at. */
+const RESOURCE_TARGETS: Partial<Record<string, string>> = {
+  'quantumultx-conf': 'quantumultx',
+  'loon-conf': 'loon',
+}
+
+/**
+ * Full Loon / Quantumult X profiles reference node subscriptions instead of
+ * inlining nodes, so nodes refresh without re-importing the profile. Each
+ * named set gets its own resource (same URL, node-only target, `part=i`);
+ * without sets there is a single `SubBridge` resource. Works for both
+ * /api/convert URLs and /api/share/:id short links (which accept the same
+ * `target` / `part` overrides).
+ */
+export function attachResources(request: ConvertRequest, requestUrl: string): void {
+  const nodeTarget = RESOURCE_TARGETS[request.target]
+  if (!nodeTarget) return
+  const base = new URL(requestUrl)
+  base.searchParams.set('target', nodeTarget)
+  base.searchParams.delete('part')
+  const groups = request.options.groups
+  if (groups && groups.length > 0) {
+    request.options.resources = groups.map((tag, i) => {
+      const u = new URL(base)
+      u.searchParams.set('part', String(i))
+      return { tag, url: u.toString() }
+    })
+  } else {
+    request.options.resources = [{ tag: 'SubBridge', url: base.toString() }]
+  }
 }

@@ -113,7 +113,8 @@ https://<your-api>/api/convert
   &group=Prime,auto                # optional, parallel to url; name[,auto|fallback]
   &group=Backup,fallback
   &target=mihomo                   # mihomo | singbox | shadowrocket | surge
-                                   # | quantumultx | base64 | sharelink
+                                   # | quantumultx | quantumultx-conf | loon
+                                   # | loon-conf | base64 | sharelink
   &filename=MyNodes                # profile name shown in the client
   &rules=full                      # lite | default | full | none
   &include=HK|SG &exclude=expired
@@ -122,6 +123,13 @@ https://<your-api>/api/convert
   &ua=<custom-upstream-user-agent>
   &token=<api-token-if-configured>
 ```
+
+**Loon / Quantumult X full profiles** (`target=loon-conf` / `quantumultx-conf`) ship the
+same groups and rules as the other formats. Nodes are not inlined: the profile points at
+SubBridge node feeds (`[Remote Proxy]` / `[server_remote]`, one per named set via
+`part=<index>`), so nodes refresh on their own while the profile stays put. Short links
+work too — `/api/share/<id>` accepts the same `target` and `part` overrides.
+
 
 Other endpoints: `POST /api/short` (encrypted short link),
 `GET /api/share/:id`, `GET /api/qrcode?text=…`, `GET /api/version`.

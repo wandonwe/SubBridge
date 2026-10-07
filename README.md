@@ -5,7 +5,7 @@
 **Bridge Every Subscription. —— 最方便的自建节点转换工具**
 
 一个现代、轻量、安全的订阅转换平台,支持 Mihomo (Clash Verge)、Sing-box、
-Hiddify、Shadowrocket、Surge、Quantumult X ——
+Hiddify、Shadowrocket、Surge、Quantumult X、Loon ——
 完全运行在 Cloudflare Pages + Workers 上,**无需 VPS,免费自建**。
 
 **简体中文** · [English](README.en.md)
@@ -33,7 +33,7 @@ Hiddify、Shadowrocket、Surge、Quantumult X ——
 | Hiddify / Clash / Mihomo YAML | Mihomo (Clash Verge) 完整配置(策略组 + 规则) |
 | Base64 订阅 | Sing-box JSON 配置(规则集 + Clash API 面板) |
 | 分享链接(`ss` `vmess` `vless` `trojan` `hysteria2` `tuic`) | Shadowrocket / Base64 |
-| 多条订阅合并 | Surge 5 · Quantumult X · 分享链接列表 |
+| 多条订阅合并 | Surge 5 · Quantumult X · Loon · 分享链接列表 |
 
 另有:节点重命名与正则过滤、去重、合并、命名节点集(`Prime,auto` 语法)、
 AUTO 测速池、FALLBACK 故障转移池、统一分流策略(OpenAI / Claude / Media /

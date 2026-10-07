@@ -2,7 +2,12 @@ import { randomId } from '@subbridge/utils'
 import { Hono } from 'hono'
 import type { AppContext } from '../env'
 import { seal, unseal } from '../lib/crypto'
-import { BadRequestError, type ConvertRequest, parseConvertParams } from '../lib/params'
+import {
+  attachResources,
+  BadRequestError,
+  type ConvertRequest,
+  parseConvertParams,
+} from '../lib/params'
 import { respondWithConversion } from './convert'
 
 const SHORT_PREFIX = 'sl:'
@@ -89,11 +94,19 @@ shareRoute.get('/:id', async (c) => {
   const payload = JSON.parse(plaintext) as ShortPayload
   let request: ConvertRequest
   try {
-    request = parseConvertParams(new URLSearchParams(payload.query))
+    // The stored query is fixed, but `target` and `part` may be overridden
+    // so full Loon / QX profiles can point at per-set node feeds.
+    const params = new URLSearchParams(payload.query)
+    for (const key of ['target', 'part']) {
+      const v = c.req.query(key)
+      if (v !== undefined) params.set(key, v)
+    }
+    request = parseConvertParams(params)
   } catch (err) {
     if (err instanceof BadRequestError) return c.json({ error: err.message }, 400)
     throw err
   }
   request.options.profileUrl = c.req.url
+  attachResources(request, c.req.url)
   return respondWithConversion(c.env, request, c.req.header('If-None-Match'))
 })

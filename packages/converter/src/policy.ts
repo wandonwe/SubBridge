@@ -223,6 +223,40 @@ export function surgeRuleUrl(path: string): string {
   return `${BM7}/${path}`
 }
 
+/**
+ * blackmatrix7 list for Loon / Quantumult X. Those trees use the plain
+ * `<Name>/<Name>.list` file (no `_All_No_Resolve` variants), so derive it
+ * from the Surge path's directory.
+ */
+export function appRuleUrl(client: 'Loon' | 'QuantumultX', surgePath: string): string {
+  const dir = surgePath.split('/')[0]
+  return `https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/${client}/${dir}/${dir}.list`
+}
+
+const QURE_FASTLY = 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color'
+
+/** Same Qure icon via jsDelivr (raw.githubusercontent.com is often slow in CN). */
+export function fastlyIcon(url: string | undefined): string | undefined {
+  return url?.replace(`${QURE}/`, `${QURE_FASTLY}/`)
+}
+
+/**
+ * Icons for Loon / Quantumult X. QX only renders small RGBA PNGs, so the
+ * large lobehub palette PNGs used elsewhere are swapped for 144px ones.
+ */
+export const QX_LOON_ICONS: Record<string, string> = {
+  Proxy: `${QURE_FASTLY}/Global.png`,
+  Microsoft: `${QURE_FASTLY}/Microsoft.png`,
+  OpenAI: `${QURE_FASTLY}/ChatGPT.png`,
+  Claude: 'https://fastly.jsdelivr.net/gh/mrblack0407/surge-icons@main/icons/Claude.png',
+  Media: `${QURE_FASTLY}/ForeignMedia.png`,
+  Games: `${QURE_FASTLY}/Game.png`,
+  Guard: `${QURE_FASTLY}/Advertising.png`,
+  Final: `${QURE_FASTLY}/Final.png`,
+  AUTO: `${QURE_FASTLY}/Auto.png`,
+  FALLBACK: `${QURE_FASTLY}/Filter.png`,
+}
+
 /** Detail-only group: game platforms, mostly best served direct in CN. */
 export const GAMES_GROUP: SelectorGroup = {
   name: 'Games',

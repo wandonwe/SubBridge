@@ -110,7 +110,8 @@ https://<你的API>/api/convert
   &group=Prime,auto                # 可选,与 url 一一对应;名称[,auto|fallback]
   &group=Backup,fallback
   &target=mihomo                   # mihomo | singbox | shadowrocket | surge
-                                   # | quantumultx | base64 | sharelink
+                                   # | quantumultx | quantumultx-conf | loon
+                                   # | loon-conf | base64 | sharelink
   &filename=我的节点               # 客户端显示的配置名(支持中文)
   &rules=full                      # lite | default | full | none
   &include=HK|SG &exclude=到期
@@ -119,6 +120,12 @@ https://<你的API>/api/convert
   &ua=<自定义上游 User-Agent>
   &token=<如果实例设置了访问令牌>
 ```
+
+**Loon / Quantumult X 完整配置**(`target=loon-conf` / `quantumultx-conf`)与其他格式使用同一套分组和规则。
+节点不直接写进配置,而是引用 SubBridge 的节点订阅(`[Remote Proxy]` / `[server_remote]`,
+每个命名分组一条,通过 `part=<序号>` 区分),所以节点会自动更新,配置本身不用重新导入。
+短链同样可用:`/api/share/<id>` 也接受 `target` 和 `part` 参数覆盖。
+
 
 其他端点:`POST /api/short`(加密短链)、`GET /api/share/:id`、
 `GET /api/qrcode?text=…`、`GET /api/version`。

@@ -12,6 +12,17 @@ export const FORMATS: FormatMeta[] = [
   { value: 'shadowrocket', label: 'Shadowrocket', hint: 'Base64 subscription' },
   { value: 'surge', label: 'Surge', hint: 'Surge 5 managed profile' },
   { value: 'quantumultx', label: 'Quantumult X', hint: 'Server snippet' },
+  {
+    value: 'quantumultx-conf',
+    label: 'Quantumult X (full config)',
+    hint: 'Profile with groups & rules; nodes auto-refresh',
+  },
+  {
+    value: 'loon-conf',
+    label: 'Loon (full config)',
+    hint: 'Profile with groups & rules; nodes auto-refresh',
+  },
+  { value: 'loon', label: 'Loon (nodes)', hint: 'Node list for [Remote Proxy]' },
   { value: 'base64', label: 'Base64', hint: 'Universal v2ray subscription' },
   { value: 'sharelink', label: 'Share Links', hint: 'Plain list of URIs' },
 ]
