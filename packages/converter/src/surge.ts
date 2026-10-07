@@ -57,8 +57,9 @@ export function toSurge(nodes: ProxyNode[], options: ConvertOptions = {}): strin
     `internet-test-url = ${INTERNET_TEST_URL}`,
     `proxy-test-url = ${testUrl}`,
     'test-timeout = 5',
-    'dns-server = system, 223.5.5.5, 119.29.29.29',
-    'encrypted-dns-server = https://dns.alidns.com/dns-query, https://doh.pub/dns-query',
+    // With encrypted DNS set, plain DNS only bootstraps the DoH hostname.
+    'dns-server = 119.29.29.29',
+    'encrypted-dns-server = https://doh.pub/dns-query',
     'hijack-dns = *:53',
     'exclude-simple-hostnames = true',
     'skip-proxy = 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16, 224.0.0.0/4, 240.0.0.0/4, 255.255.255.255, localhost, *.local, ::1, fc00::/7, fe80::/10, ff00::/8',

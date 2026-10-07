@@ -120,11 +120,10 @@ export function toSingbox(nodes: ProxyNode[], options: ConvertOptions = {}): str
       // DoH servers are addressed by hostname, so they need a plain-IP
       // bootstrap resolver (mandatory once more than one server exists).
       servers: [
-        { tag: 'alidns', type: 'https', server: 'dns.alidns.com', domain_resolver: 'bootstrap' },
         { tag: 'dnspod', type: 'https', server: 'doh.pub', domain_resolver: 'bootstrap' },
-        { tag: 'bootstrap', type: 'udp', server: '223.5.5.5' },
+        { tag: 'bootstrap', type: 'udp', server: '119.29.29.29' },
       ],
-      final: 'alidns',
+      final: 'dnspod',
     },
     inbounds: [
       {

@@ -131,8 +131,10 @@ export function toMihomo(nodes: ProxyNode[], options: ConvertOptions = {}): stri
         '+.xboxlive.com',
       ],
       // Plain-IP bootstrap so the DoH hostnames below can be resolved.
-      'default-nameserver': ['223.5.5.5', '119.29.29.29'],
-      nameserver: ['https://dns.alidns.com/dns-query', 'https://doh.pub/dns-query'],
+      'default-nameserver': ['119.29.29.29'],
+      // Single DoH on purpose: mihomo races all nameservers and takes the
+      // fastest reply, so a second (stale-caching) resolver would win often.
+      nameserver: ['https://doh.pub/dns-query'],
     },
     proxies: nodes.map(toMihomoProxy),
     'proxy-groups': groups,
