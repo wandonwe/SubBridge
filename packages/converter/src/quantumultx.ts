@@ -7,6 +7,7 @@ import {
   FALLBACK_GROUP,
   FINAL_GROUP,
   fastlyIcon,
+  finalDefaultsDirect,
   MAIN_GROUP,
   orderedSets,
   PROXY_TEST_URL,
@@ -89,9 +90,12 @@ export function toQuantumultXConfig(nodes: ProxyNode[], options: ConvertOptions 
   )
   if (useRules) {
     for (const g of selectorGroupsForPreset(preset)) {
-      const opts = selectorOptions(g, setNames)
-        .map(qxPolicy)
-        .filter((o): o is string => o !== null)
+      const opts = finalDefaultsDirect(
+        g,
+        selectorOptions(g, setNames)
+          .map(qxPolicy)
+          .filter((o): o is string => o !== null),
+      )
       out.push(`static=${g.name}, ${opts.join(', ')}${icon(g.name)}`)
     }
   }

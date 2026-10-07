@@ -7,6 +7,7 @@ import {
   FALLBACK_GROUP,
   FINAL_GROUP,
   fastlyIcon,
+  finalDefaultsDirect,
   INTERNET_TEST_URL,
   MAIN_GROUP,
   orderedSets,
@@ -102,9 +103,12 @@ export function toLoonConfig(nodes: ProxyNode[], options: ConvertOptions = {}): 
   if (useRules) {
     for (const g of selectorGroupsForPreset(preset)) {
       // Loon has no REJECT-DROP policy.
-      const opts = selectorOptions(g, setNames)
-        .filter((o) => o !== 'REJECT-DROP')
-        .map(loonPolicy)
+      const opts = finalDefaultsDirect(
+        g,
+        selectorOptions(g, setNames)
+          .filter((o) => o !== 'REJECT-DROP')
+          .map(loonPolicy),
+      )
       out.push(`${g.name} = select,${opts.join(',')}${icon(QX_LOON_ICONS[g.name])}`)
     }
   }

@@ -257,6 +257,16 @@ export const QX_LOON_ICONS: Record<string, string> = {
   FALLBACK: `${QURE_FASTLY}/Filter.png`,
 }
 
+/**
+ * Loon / Quantumult X profiles default Final to DIRECT (matching the
+ * hand-maintained iOS configs); other formats keep the shared default.
+ */
+export function finalDefaultsDirect(group: SelectorGroup, options: string[]): string[] {
+  if (group.name !== FINAL_GROUP) return options
+  const direct = options.find((o) => o.toUpperCase() === 'DIRECT')
+  return direct ? [direct, ...options.filter((o) => o !== direct)] : options
+}
+
 /** Detail-only group: game platforms, mostly best served direct in CN. */
 export const GAMES_GROUP: SelectorGroup = {
   name: 'Games',
